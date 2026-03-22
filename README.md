@@ -2,7 +2,7 @@
 
 > 부산 황령산 조망 지수 앱 — 오늘 황령산에 가면 얼마나 잘 보일까?
 
-[![Live](https://img.shields.io/badge/Live-hwanggam.com-22d3ee?style=flat-square)](https://www.hwanggam.com)
+[![Live](https://img.shields.io/badge/Live-Demo-22d3ee?style=flat-square)](https://hwang-gam-ji.vercel.app/)
 
 부산 황령산 봉수대에서의 조망(야경) 상태를 **가시거리·습도·미세먼지** 기반으로 점수화해 알려주는 웹앱입니다.
 
@@ -80,7 +80,7 @@ data/
 
 ## 배포
 
-- **Vercel** — https://www.hwanggam.com
+- **Vercel** — https://hwang-gam-ji.vercel.app/
 - GitHub push 시 자동 배포
 
 ---
