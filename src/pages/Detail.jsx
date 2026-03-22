@@ -2,6 +2,13 @@ import { useLocation } from 'react-router-dom'
 import { useWeather } from '../contexts/WeatherContext'
 import './Detail.css'
 
+function formatObservedAt(tm) {
+  if (!tm) return ''
+  const m = tm.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/)
+  if (!m) return tm
+  return `${m[1]}-${m[2]}-${m[3]} ${m[4]}시 관측`
+}
+
 export default function Detail() {
   const { metrics, analysis, loading, error, updatedAt } = useWeather()
   const { state } = useLocation()
@@ -39,6 +46,10 @@ export default function Detail() {
           <span className="metric-label">가시거리</span>
           <span className="metric-value main">{m.visibility_km}</span>
           <span className="metric-unit">km</span>
+          <span className="metric-sub metric-source">
+            {m.visibility_station || '부산 기상관측소'}
+            {m.visibility_observed_at ? ` · ${formatObservedAt(m.visibility_observed_at)}` : ''}
+          </span>
         </div>
 
         <div className="metric-card glass">

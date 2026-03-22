@@ -40,7 +40,7 @@ export function WeatherProvider({ children }) {
       setForecast(forecastData)
       setUpdatedAt(new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false }))
     } catch (err) {
-      setError(err?.message || '날씨 데이터를 불러오지 못했습니다.')
+      setError(err?.message || '데이터를 불러올 수 없습니다.')
     } finally {
       setLoading(false)
     }

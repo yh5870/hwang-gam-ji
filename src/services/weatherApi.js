@@ -55,39 +55,51 @@ function getLatestBaseTime() {
 
 /**
  * ASOS 시간자료(Hourly) - 부산(159) 시정(가시거리) 조회
- * getWthrDataList + dateCd=HR = 시간자료 (실시간)
- * ※ 데이터 15~20분 지연 → 현재 시각보다 1시간 전 요청 (확정된 데이터)
+ * getWthrDataList + dateCd=HR = 시간자료
+ * ※ 전일(D-1) 자료까지 제공, 전일 자료는 11시 이후 조회가능 (활용가이드)
+ * ※ 시정(vs) 단위: 10m → km 변환: vs/100
  */
 export async function fetchAsosVisibility(apiKey) {
   const now = new Date()
-  const y = now.getFullYear()
-  const m = String(now.getMonth() + 1).padStart(2, '0')
-  const d = String(now.getDate()).padStart(2, '0')
-  const date = `${y}${m}${d}`
   const currentHour = now.getHours()
-  const hourToRequest = Math.max(0, currentHour - 1)
+  const targetDate = new Date(now)
+  if (currentHour < 11) {
+    targetDate.setDate(targetDate.getDate() - 2)
+  } else {
+    targetDate.setDate(targetDate.getDate() - 1)
+  }
+  const y = targetDate.getFullYear()
+  const m = String(targetDate.getMonth() + 1).padStart(2, '0')
+  const d = String(targetDate.getDate()).padStart(2, '0')
+  const date = `${y}${m}${d}`
+  const hourToRequest = currentHour < 11 ? 23 : Math.max(0, currentHour - 1)
   const hour = String(hourToRequest).padStart(2, '0')
 
+  let lastError = null
+
   let result = await fetchAsosVisibilityWithTime(apiKey, date, hour)
-  if (result != null) return result
+  if (result.value != null) return result
+  if (result.error) lastError = result.error
 
-  for (let offset = 2; offset <= 5; offset++) {
-    const h = Math.max(0, currentHour - offset)
-    if (h === hourToRequest) continue
+  for (let h = 22; h >= 0; h -= 2) {
+    if (String(h).padStart(2, '0') === hour) continue
     result = await fetchAsosVisibilityWithTime(apiKey, date, String(h).padStart(2, '0'))
-    if (result != null) return result
+    if (result.value != null) return result
+    if (result.error) lastError = result.error
   }
 
-  if (currentHour < 3) {
-    const yesterday = new Date(now)
-    yesterday.setDate(yesterday.getDate() - 1)
-    const yy = yesterday.getFullYear()
-    const ym = String(yesterday.getMonth() + 1).padStart(2, '0')
-    const yd = String(yesterday.getDate()).padStart(2, '0')
-    result = await fetchAsosVisibilityWithTime(apiKey, `${yy}${ym}${yd}`, '23')
-    if (result != null) return result
-  }
-  return null
+  const dayBefore = new Date(targetDate)
+  dayBefore.setDate(dayBefore.getDate() - 1)
+  const yd = `${dayBefore.getFullYear()}${String(dayBefore.getMonth() + 1).padStart(2, '0')}${String(dayBefore.getDate()).padStart(2, '0')}`
+  result = await fetchAsosVisibilityWithTime(apiKey, yd, '23')
+  if (result.value != null) return result
+  if (result.error) lastError = result.error
+
+  throw new Error(
+    lastError
+      ? `가시거리 데이터를 불러올 수 없습니다. (${lastError})`
+      : '가시거리 데이터를 불러올 수 없습니다. 기상청 ASOS API에서 응답이 없습니다.',
+  )
 }
 
 async function fetchAsosVisibilityWithTime(apiKey, date, hour) {
@@ -106,19 +118,51 @@ async function fetchAsosVisibilityWithTime(apiKey, date, hour) {
   })
 
   const url = `${ASOS_BASE}/getWthrDataList?${params}`
-  const res = await fetch(url)
-  const data = await res.json()
+  let res
+  let data
+  try {
+    res = await fetch(url)
+    data = await res.json()
+  } catch (e) {
+    return { value: null, error: `네트워크 오류: ${e?.message || '연결 실패'}` }
+  }
 
-  if (data.response?.header?.resultCode !== '00' && data.response?.header?.resultCode !== '03') {
-    return null
+  const header = data.response?.header
+  const resultCode = String(header?.resultCode ?? '')
+  const resultMsg = header?.resultMsg || ''
+
+  if (resultCode !== '00' && resultCode !== '0') {
+    if (resultCode === '03') {
+      return { value: null, error: resultMsg || '해당 시간 데이터 없음 (NODATA_ERROR)' }
+    }
+    return { value: null, error: resultMsg || `API 오류 (코드: ${resultCode})` }
   }
 
   const items = data.response?.body?.items?.item
-  if (!items || (Array.isArray(items) ? items.length === 0 : !items.vs)) return null
-
+  if (!items) {
+    return { value: null, error: '응답에 데이터 없음' }
+  }
   const item = Array.isArray(items) ? items[0] : items
+  if (!item || item.vs == null || item.vs === '') {
+    return { value: null, error: '시정(vs) 값 없음' }
+  }
+
   const vs = Number(item.vs)
-  return Number.isNaN(vs) ? null : vs / 1000
+  if (Number.isNaN(vs) || vs < 0) {
+    return { value: null, error: `잘못된 시정 값: ${item.vs}` }
+  }
+
+  const ta = item.ta != null && item.ta !== '' ? Number(item.ta) : null
+  const ws = item.ws != null && item.ws !== '' ? Number(item.ws) : null
+
+  return {
+    value: vs / 100,
+    temperature: !Number.isNaN(ta) ? ta : null,
+    wind_speed: !Number.isNaN(ws) ? ws : null,
+    observedAt: item.tm || null,
+    stationName: item.stnNm || '부산',
+    error: null,
+  }
 }
 
 /**
@@ -142,7 +186,8 @@ export async function fetchVilageFcst(apiKey) {
   const res = await fetch(url)
   const data = await res.json()
 
-  if (data.response?.header?.resultCode !== '00') {
+  const fcstResultCode = String(data.response?.header?.resultCode ?? '')
+  if (fcstResultCode !== '00' && fcstResultCode !== '0') {
     throw new Error(data.response?.header?.resultMsg || '단기예보 API 오류')
   }
 
@@ -162,6 +207,8 @@ export async function fetchVilageFcst(apiKey) {
     sky: byKey.SKY,
     pty: byKey.PTY,
     reh: byKey.REH ? Number(byKey.REH) : null,
+    tmp: byKey.TMP ? Number(byKey.TMP) : null,
+    wsd: byKey.WSD ? Number(byKey.WSD) : null,
   }
 }
 
@@ -278,30 +325,47 @@ function parsePmValue(v) {
 
 /**
  * 황감지용 통합 날씨 데이터 조회
+ * 필수: 가시거리(ASOS), 단기예보(습도/하늘) - 실패 시 에러 throw (fallback 사용 안 함)
+ * 선택: 대기질 - 실패 시 Moderate 기본값
  */
 export async function fetchHwangGamWeather(apiKey) {
-  const [visibilityKm, vilage, air] = await Promise.all([
+  const [asosResult, vilage, air] = await Promise.all([
     fetchAsosVisibility(apiKey),
     fetchVilageFcst(apiKey),
     fetchAirQuality(apiKey).catch(() => null),
   ])
+
+  if (!asosResult || asosResult.value == null) {
+    throw new Error('가시거리 데이터를 불러올 수 없습니다.')
+  }
+  if (!vilage) {
+    throw new Error('습도·하늘 데이터를 불러올 수 없습니다. 단기예보 API에서 응답이 없습니다.')
+  }
 
   const dustLevel = air?.dust ?? 'Moderate'
   const dustValue = air?.pm25 ?? null
   const dustLabel = air?.dust_label ?? (dustLevel === 'Good' ? '좋음' : dustLevel === 'Bad' ? '나쁨' : '보통')
   const station = air?.station ?? null
 
+  const tempFromVilage = vilage.tmp != null ? Number(vilage.tmp) : null
+  const windFromVilage = vilage.wsd != null ? Number(vilage.wsd) : null
+
+  const visibilityObservedAt = asosResult.observedAt || null
+  const visibilityStation = asosResult.stationName || '부산 기상관측소'
+
   return {
-    visibility_km: visibilityKm ?? 10,
-    humidity: vilage?.reh ?? 50,
+    visibility_km: asosResult.value,
+    visibility_observed_at: visibilityObservedAt,
+    visibility_station: visibilityStation,
+    humidity: vilage.reh ?? 50,
     dust: dustLevel,
     dust_value: dustValue,
     dust_label: dustLabel,
     station,
     sky: vilage ? skyToText(vilage.sky) : '정보없음',
     pty: vilage?.pty ?? '0',
-    wind_speed: null,
-    temperature: null,
+    wind_speed: asosResult.wind_speed ?? windFromVilage ?? null,
+    temperature: asosResult.temperature ?? tempFromVilage ?? null,
   }
 }
 
@@ -326,7 +390,8 @@ export async function fetchForecast(apiKey) {
   const res = await fetch(url)
   const data = await res.json()
 
-  if (data.response?.header?.resultCode !== '00') {
+  const forecastResultCode = String(data.response?.header?.resultCode ?? '')
+  if (forecastResultCode !== '00' && forecastResultCode !== '0') {
     throw new Error(data.response?.header?.resultMsg || '단기예보 API 오류')
   }
 

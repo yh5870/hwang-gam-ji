@@ -98,6 +98,13 @@
   color: var(--text-secondary);
 }
 
+.metric-source {
+  display: block;
+  margin-top: 8px;
+  font-size: 0.8rem;
+  opacity: 0.9;
+}
+
 .metric-card.primary .metric-unit {
   font-size: 1.25rem;
   color: var(--accent);
