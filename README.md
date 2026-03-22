@@ -1,57 +1,90 @@
 # 황감지 (Hwang-Gam-Ji)
 
-부산 황령산 조망 지수 시각화 목업 웹앱
+> 부산 황령산 조망 지수 앱 — 오늘 황령산에 가면 얼마나 잘 보일까?
+
+[![Live](https://img.shields.io/badge/Live-hwanggam.com-22d3ee?style=flat-square)](https://www.hwanggam.com)
+
+부산 황령산 봉수대에서의 조망(야경) 상태를 **가시거리·습도·미세먼지** 기반으로 점수화해 알려주는 웹앱입니다.
+
+---
+
+## 주요 기능
+
+- **황감 점수** — 0~99점 (잭팟 시 1,000~10,000점)
+- **상세 지표** — 가시거리(km), 초미세먼지, 습도, 풍속, 기온
+- **24시간 예측** — 현재 시각 기준 예보 기반 점수 흐름
+- **옷차림 추천** — 기온·풍속·날씨 기반 한 줄 팁
+
+### 점수 체계
+
+| 가시거리 | 점수 대역 | 설명 |
+|----------|-----------|------|
+| 50km↑ | 90~99 | 최상 |
+| 40km 전후 | 80~89 | 우수 |
+| 30km 전후 | 70~79 | 양호 |
+| 0~20km | 0~69 | 가시거리에 비례 분포 |
+
+- **10의 자리** = 가시거리로 결정  
+- **1의 자리** = 습도·미세먼지 보정 (0~9)  
+- **잭팟** = 70km↑ + 좋은 조건 시 10,000점
+
+---
+
+## 기술 스택
+
+- **React 18** + **Vite**
+- **React Router**
+- **공공데이터포털 API** — 기상청 ASOS(가시거리), 단기예보, 부산 대기질
+
+---
 
 ## 실행 방법
 
 ```bash
+git clone https://github.com/yh5870/hwang-gam-ji.git
+cd hwang-gam-ji
 npm install
 npm run dev
 ```
 
 브라우저에서 http://localhost:5173/ 접속
 
-## 기상청 API 연동
+### API 키 설정
 
-### 1. API 키 발급
-- [공공데이터포털](https://www.data.go.kr) 접속
-- **기상청_지상(종관, ASOS) 시간자료** + **단기예보 동네예보** 활용 신청
-- **일반 인증키(디코딩)** 복사
-
-### 2. 환경변수 설정
-프로젝트 루트에 `.env` 파일 생성:
+1. [공공데이터포털](https://www.data.go.kr)에서 **일반 인증키** 발급
+2. **기상청_지상(ASOS) 시간자료**, **단기예보 동네예보**, **부산광역시_대기질 정보** 활용 신청
+3. 프로젝트 루트에 `.env` 생성:
 
 ```
-VITE_KMA_API_KEY=여기에_발급받은_인증키_붙여넣기
+VITE_KMA_API_KEY=발급받은_인증키
 ```
 
-`.env.example`을 복사해 `.env`로 이름 변경 후 키 입력해도 됨.
+`.env.example`을 복사해 사용해도 됩니다.
 
-### 3. 동작
-- API 키가 있으면 **실시간 기상청 데이터** 자동 로드
-- 부산(159) ASOS 시정 → 가시거리 km
-- 황령산 격자(98, 75) 단기예보 → 습도, 하늘상태
-
-## 빌드
-
-```bash
-npm run build
-npm run preview  # 빌드 결과물 미리보기
-```
+---
 
 ## 프로젝트 구조
 
-- `/data/routes/about.json` - 등급 가이드 등 정적 데이터
-- `/src/contexts/WeatherContext.jsx` - 날씨 상태·API 호출
-- `/src/services/weatherApi.js` - 기상청 API 연동
-- `/src/utils/hwangGamAnalysis.js` - 황감 지수 알고리즘
+```
+src/
+├── components/     # Fireflies, TabBar 등
+├── contexts/       # WeatherContext
+├── pages/          # Home, Detail, Forecast, About
+├── services/       # weatherApi.js (API 연동)
+└── utils/          # hwangGamAnalysis.js (점수 알고리즘)
+data/
+└── routes/         # about.json (등급 가이드)
+```
 
-## 라우트
+---
 
-| 경로 | 설명 |
-|------|------|
-| `/` | 메인 대시보드 (황감 점수, 잭팟) |
-| `/detail` | 상세 지표 (가시거리, 미세먼지 등) |
-| `/forecast` | 24시간 예측 |
-| `/about` | 황감 지수 공식 및 등급 가이드 |
+## 배포
 
+- **Vercel** — https://www.hwanggam.com
+- GitHub push 시 자동 배포
+
+---
+
+## 라이선스
+
+Private
