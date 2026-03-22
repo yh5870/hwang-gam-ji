@@ -9,6 +9,38 @@ function formatObservedAt(tm) {
   return `${m[1]}-${m[2]}-${m[3]} ${m[4]}시 관측`
 }
 
+function getClothingRecommendation({ temperature, wind_speed, pty }) {
+  const temp = temperature != null ? Number(temperature) : null
+  const wind = wind_speed != null ? Number(wind_speed) : null
+  const isRain = pty && ['1', '2', '4', '5', '6', '7'].includes(String(pty))
+  const isSnow = pty === '3'
+
+  if (temp == null || Number.isNaN(temp)) {
+    return '기온 정보가 없어 옷차림 추천이 어렵습니다.'
+  }
+
+  const windTip = wind != null && wind >= 5 ? ' 바람 불면 바람막이 추천해요.' : ''
+  const rainTip = isRain ? ' 우산·우비 챙기세요.' : ''
+  const snowTip = isSnow ? ' 방한·미끄럼 주의하세요.' : ''
+
+  if (temp >= 25) {
+    return `추천: 반팔·반바지, 썬크림.${windTip}${rainTip}`
+  }
+  if (temp >= 20) {
+    return `추천: 긴팔 가볍게, 얇은 자켓 준비.${windTip}${rainTip}`
+  }
+  if (temp >= 15) {
+    return `추천: 긴팔 + 가벼운 겉옷. 황령산은 바닷바람 있어요.${windTip}${rainTip}`
+  }
+  if (temp >= 10) {
+    return `추천: 니트·자켓. 산 위는 더 추울 수 있어요.${windTip}${rainTip}${snowTip}`
+  }
+  if (temp >= 5) {
+    return `추천: 코트·패딩. 체감온도 낮을 수 있어요.${windTip}${rainTip}${snowTip}`
+  }
+  return `추천: 두꺼운 패딩·내복. 꽁꽁 얼어요!${windTip}${rainTip}${snowTip}`
+}
+
 export default function Detail() {
   const { metrics, analysis, loading, error, updatedAt } = useWeather()
   const { state } = useLocation()
@@ -65,6 +97,7 @@ export default function Detail() {
           <span className="metric-label">습도</span>
           <span className="metric-value">{m.humidity}</span>
           <span className="metric-unit">%</span>
+          {m.fcst_at && <span className="metric-sub metric-source">{m.fcst_at}</span>}
         </div>
 
         <div className="metric-card glass">
@@ -82,6 +115,7 @@ export default function Detail() {
         <div className="metric-card glass">
           <span className="metric-label">하늘</span>
           <span className="metric-value">{m.sky ?? '—'}</span>
+          {m.fcst_at && <span className="metric-sub metric-source">{m.fcst_at}</span>}
         </div>
       </div>
 
@@ -107,6 +141,8 @@ export default function Detail() {
             <p className="detail-reason">{d.reason}</p>
           </div>
         </div>
+
+        <p className="clothing-tip">{getClothingRecommendation(m)}</p>
       </section>
     </div>
   )

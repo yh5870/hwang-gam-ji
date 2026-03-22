@@ -3,7 +3,7 @@
 .detail-page {
   min-height: 100%;
   padding-bottom: 100px;
-  background: linear-gradient(180deg, #020617 0%, #0f172a 40%, #1e1b4b 100%);
+  background: transparent; /* Fireflies 비침 */
 }
 
 .detail-page .page-title {
@@ -114,6 +114,15 @@
 .analysis-section {
   margin-top: 24px;
   padding: 24px;
+}
+
+.clothing-tip {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
 }
 
 .analysis-title {

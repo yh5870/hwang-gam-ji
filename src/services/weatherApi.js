@@ -58,6 +58,7 @@ function getLatestBaseTime() {
  * getWthrDataList + dateCd=HR = 시간자료
  * ※ 전일(D-1) 자료까지 제공, 전일 자료는 11시 이후 조회가능 (활용가이드)
  * ※ 시정(vs) 단위: 10m → km 변환: vs/100
+ * ※ D-1 하루치 한 번에 조회 후 가장 최신 관측값 사용
  */
 export async function fetchAsosVisibility(apiKey) {
   const now = new Date()
@@ -72,29 +73,24 @@ export async function fetchAsosVisibility(apiKey) {
   const m = String(targetDate.getMonth() + 1).padStart(2, '0')
   const d = String(targetDate.getDate()).padStart(2, '0')
   const date = `${y}${m}${d}`
-  const hourToRequest = currentHour < 11 ? 23 : Math.max(0, currentHour - 1)
-  const hour = String(hourToRequest).padStart(2, '0')
 
-  let lastError = null
-
-  let result = await fetchAsosVisibilityWithTime(apiKey, date, hour)
+  let result = await fetchAsosVisibilityDayRange(apiKey, date)
   if (result.value != null) return result
-  if (result.error) lastError = result.error
-
-  for (let h = 22; h >= 0; h -= 2) {
-    if (String(h).padStart(2, '0') === hour) continue
-    result = await fetchAsosVisibilityWithTime(apiKey, date, String(h).padStart(2, '0'))
-    if (result.value != null) return result
-    if (result.error) lastError = result.error
-  }
 
   const dayBefore = new Date(targetDate)
   dayBefore.setDate(dayBefore.getDate() - 1)
   const yd = `${dayBefore.getFullYear()}${String(dayBefore.getMonth() + 1).padStart(2, '0')}${String(dayBefore.getDate()).padStart(2, '0')}`
-  result = await fetchAsosVisibilityWithTime(apiKey, yd, '23')
+  result = await fetchAsosVisibilityDayRange(apiKey, yd)
   if (result.value != null) return result
-  if (result.error) lastError = result.error
 
+  for (const h of [23, 22, 20, 17, 14, 11, 8]) {
+    result = await fetchAsosVisibilitySingle(apiKey, date, String(h).padStart(2, '0'))
+    if (result.value != null) return result
+  }
+  result = await fetchAsosVisibilitySingle(apiKey, yd, '23')
+  if (result.value != null) return result
+
+  const lastError = result.error
   throw new Error(
     lastError
       ? `가시거리 데이터를 불러올 수 없습니다. (${lastError})`
@@ -102,7 +98,8 @@ export async function fetchAsosVisibility(apiKey) {
   )
 }
 
-async function fetchAsosVisibilityWithTime(apiKey, date, hour) {
+/** 단일 시각 조회 (폴백용) */
+async function fetchAsosVisibilitySingle(apiKey, date, hour) {
   const params = new URLSearchParams({
     serviceKey: apiKey,
     pageNo: 1,
@@ -114,6 +111,47 @@ async function fetchAsosVisibilityWithTime(apiKey, date, hour) {
     startHh: hour,
     endDt: date,
     endHh: hour,
+    stnIds: String(BUSAN_STN),
+  })
+  const url = `${ASOS_BASE}/getWthrDataList?${params}`
+  try {
+    const res = await fetch(url)
+    const data = await res.json()
+    const header = data.response?.header
+    const resultCode = String(header?.resultCode ?? '')
+    if (resultCode !== '00' && resultCode !== '0') return { value: null, error: header?.resultMsg }
+    const items = data.response?.body?.items?.item
+    if (!items) return { value: null, error: '데이터 없음' }
+    const item = Array.isArray(items) ? items[0] : items
+    if (!item?.vs || item.vs === '') return { value: null, error: '시정 없음' }
+    const vs = Number(item.vs)
+    if (Number.isNaN(vs) || vs < 0) return { value: null, error: `잘못된 시정: ${item.vs}` }
+    return {
+      value: vs / 100,
+      temperature: item.ta != null && item.ta !== '' ? Number(item.ta) : null,
+      wind_speed: item.ws != null && item.ws !== '' ? Number(item.ws) : null,
+      observedAt: item.tm || null,
+      stationName: item.stnNm || '부산',
+      error: null,
+    }
+  } catch (e) {
+    return { value: null, error: e?.message || '네트워크 오류' }
+  }
+}
+
+/** D-1 하루치 조회 후 가장 최신(마지막) 관측값 반환 */
+async function fetchAsosVisibilityDayRange(apiKey, date) {
+  const params = new URLSearchParams({
+    serviceKey: apiKey,
+    pageNo: 1,
+    numOfRows: 24,
+    dataType: 'JSON',
+    dataCd: 'ASOS',
+    dateCd: 'HR',
+    startDt: date,
+    startHh: '00',
+    endDt: date,
+    endHh: '23',
     stnIds: String(BUSAN_STN),
   })
 
@@ -139,13 +177,17 @@ async function fetchAsosVisibilityWithTime(apiKey, date, hour) {
   }
 
   const items = data.response?.body?.items?.item
-  if (!items) {
+  if (!items || (Array.isArray(items) && items.length === 0)) {
     return { value: null, error: '응답에 데이터 없음' }
   }
-  const item = Array.isArray(items) ? items[0] : items
-  if (!item || item.vs == null || item.vs === '') {
-    return { value: null, error: '시정(vs) 값 없음' }
-  }
+
+  const list = Array.isArray(items) ? items : [items]
+  const withVs = list
+    .filter((it) => it != null && it.vs != null && it.vs !== '')
+    .sort((a, b) => (b.tm || '').localeCompare(a.tm || ''))
+
+  const item = withVs[0]
+  if (!item) return { value: null, error: '시정(vs) 값 없음' }
 
   const vs = Number(item.vs)
   if (Number.isNaN(vs) || vs < 0) {
@@ -167,6 +209,7 @@ async function fetchAsosVisibilityWithTime(apiKey, date, hour) {
 
 /**
  * 단기예보 - 황령산 격자(98, 75) SKY, PTY, REH 조회
+ * ※ 현재 시간에 해당하는 예보 슬롯을 사용 (14시 고정 아님)
  */
 export async function fetchVilageFcst(apiKey) {
   const { base_date, base_time } = getLatestBaseTime()
@@ -174,7 +217,7 @@ export async function fetchVilageFcst(apiKey) {
   const params = new URLSearchParams({
     serviceKey: apiKey,
     pageNo: 1,
-    numOfRows: 100,
+    numOfRows: 500,
     dataType: 'JSON',
     base_date,
     base_time,
@@ -194,14 +237,30 @@ export async function fetchVilageFcst(apiKey) {
   const items = data.response?.body?.items?.item
   if (!items || !items.length) return null
 
-  const fcstDate = items[0].fcstDate
-  const fcstTime = items[0].fcstTime
-  const byKey = {}
+  const bySlot = {}
   for (const it of items) {
-    if (it.fcstDate === fcstDate && it.fcstTime === fcstTime) {
-      byKey[it.category] = it.fcstValue
-    }
+    const key = `${it.fcstDate}-${it.fcstTime}`
+    if (!bySlot[key]) bySlot[key] = {}
+    bySlot[key][it.category] = it.fcstValue
   }
+
+  const now = new Date()
+  const slots = Object.entries(bySlot)
+    .map(([key, vals]) => {
+      const [d, t] = key.split('-')
+      const h = parseInt(t.slice(0, 2), 10)
+      const m = parseInt(t.slice(2, 4), 10) || 0
+      const slotDate = new Date(parseInt(d.slice(0, 4), 10), parseInt(d.slice(4, 6), 10) - 1, parseInt(d.slice(6, 8), 10), h, m)
+      return { key, vals, slotDate }
+    })
+    .sort((a, b) => a.slotDate - b.slotDate)
+
+  const futureIdx = slots.findIndex((s) => s.slotDate > now)
+  const currentSlot =
+    futureIdx > 0 ? slots[futureIdx - 1] : futureIdx === 0 ? slots[0] : slots[slots.length - 1]
+  const target = currentSlot || slots[0]
+  const [fcstDate, fcstTime] = target.key.split('-')
+  const byKey = target.vals
 
   return {
     sky: byKey.SKY,
@@ -209,6 +268,8 @@ export async function fetchVilageFcst(apiKey) {
     reh: byKey.REH ? Number(byKey.REH) : null,
     tmp: byKey.TMP ? Number(byKey.TMP) : null,
     wsd: byKey.WSD ? Number(byKey.WSD) : null,
+    fcstDate,
+    fcstTime,
   }
 }
 
@@ -352,11 +413,17 @@ export async function fetchHwangGamWeather(apiKey) {
 
   const visibilityObservedAt = asosResult.observedAt || null
   const visibilityStation = asosResult.stationName || '부산 기상관측소'
+  const fcstDate = vilage.fcstDate || null
+  const fcstTime = vilage.fcstTime || null
+  const fcstAt = fcstDate && fcstTime
+    ? `${fcstDate.slice(0, 4)}-${fcstDate.slice(4, 6)}-${fcstDate.slice(6, 8)} ${fcstTime.slice(0, 2)}시 예보`
+    : null
 
   return {
     visibility_km: asosResult.value,
     visibility_observed_at: visibilityObservedAt,
     visibility_station: visibilityStation,
+    fcst_at: fcstAt,
     humidity: vilage.reh ?? 50,
     dust: dustLevel,
     dust_value: dustValue,
@@ -405,11 +472,23 @@ export async function fetchForecast(apiKey) {
     byTime[key][it.category] = it.fcstValue
   }
 
+  const now = new Date()
   const sorted = Object.entries(byTime)
-    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, vals]) => {
+      const [fd, ft] = key.split('-')
+      const h = parseInt(ft.slice(0, 2), 10)
+      const slotDate = new Date(parseInt(fd.slice(0, 4), 10), parseInt(fd.slice(4, 6), 10) - 1, parseInt(fd.slice(6, 8), 10), h)
+      return { key, vals, slotDate }
+    })
+    .sort((a, b) => a.slotDate - b.slotDate)
     .slice(0, 24)
 
-  return sorted.map(([key, vals], i) => {
+  const futureIdx = sorted.findIndex((s) => s.slotDate > now)
+  const currentIdx = futureIdx > 0 ? futureIdx - 1 : futureIdx === 0 ? 0 : sorted.length - 1
+  const reordered = [...sorted.slice(currentIdx), ...sorted.slice(0, currentIdx)].slice(0, 24)
+
+  return reordered.map((entry, i) => {
+    const { key, vals } = entry
     const [, ft] = key.split('-')
     const reh = Number(vals.REH) || 50
     const sky = Number(vals.SKY) || 1

@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { WeatherProvider } from './contexts/WeatherContext'
 import './App.css'
+import Fireflies from './components/Fireflies'
 import Home from './pages/Home'
 import Detail from './pages/Detail'
 import Forecast from './pages/Forecast'
@@ -12,6 +13,7 @@ export default function App() {
     <WeatherProvider>
       <BrowserRouter>
         <div className="app">
+          <Fireflies />
           <main>
             <Routes>
               <Route path="/" element={<Home />} />
