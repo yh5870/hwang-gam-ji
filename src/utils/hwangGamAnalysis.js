@@ -21,9 +21,21 @@ function getOnesDigit(hum, dustBad, dustModerate) {
   return Math.max(0, Math.min(9, Math.round(ones)))
 }
 
-/** 10의 자리 (0-9): 가시거리 km / 10 */
-function getTensDigit(vis) {
-  return Math.min(9, Math.floor(vis / 10))
+/**
+ * 가시거리별 점수 구간 (사용자 체감 반영)
+ * - 50km+ → 90-99
+ * - 40-49km → 80-89
+ * - 30-39km → 70-79
+ * - 20-29km → 70-79
+ * - 0-20km → 0-69 (가시거리에 비례 분포, 1의 자리는 습도·먼지)
+ */
+function getBaseScoreFromVisibility(vis, ones) {
+  if (vis >= 50) return 90 + ones
+  if (vis >= 40) return 80 + ones
+  if (vis >= 20) return 70 + ones
+  const visBase = Math.round((vis / 20) * 60)
+  const onesImpact = Math.round(ones * (vis / 20))
+  return Math.min(69, Math.max(0, visBase + onesImpact))
 }
 
 /**
@@ -42,9 +54,8 @@ export function getHwangGamAnalysis({ visibility_km, humidity, dust }) {
   const dustModerate = DUST_MODERATE.some((d) => dustLower.includes(d))
   const dustBad = DUST_BAD.some((d) => dustLower.includes(d))
 
-  const tens = getTensDigit(vis)
   const ones = getOnesDigit(hum, dustBad, dustModerate)
-  const baseScore = tens * 10 + ones
+  const baseScore = getBaseScoreFromVisibility(vis, ones)
 
   // 잭팟: 70km↑ + 좋은 조건
   if (vis >= 70 && hum <= 30 && dustGood) {
