@@ -11,7 +11,7 @@ export function WeatherProvider({ children }) {
   const [error, setError] = useState(null)
   const [updatedAt, setUpdatedAt] = useState(null)
 
-  const apiKey = import.meta.env.VITE_KMA_API_KEY
+  const apiKey = (import.meta.env.VITE_KMA_API_KEY || '').trim()
 
   const load = useCallback(async () => {
     if (!apiKey) {

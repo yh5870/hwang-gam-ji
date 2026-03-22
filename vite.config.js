@@ -6,9 +6,14 @@ export default defineConfig({
   server: {
     proxy: {
       '/api/kma': {
-        target: 'http://apis.data.go.kr',
+        target: 'https://apis.data.go.kr',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/kma/, ''),
+      },
+      '/api/busan': {
+        target: 'https://apis.data.go.kr',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/busan/, ''),
       },
     },
   },

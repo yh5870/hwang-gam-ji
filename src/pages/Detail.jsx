@@ -42,9 +42,12 @@ export default function Detail() {
         </div>
 
         <div className="metric-card glass">
-          <span className="metric-label">미세먼지</span>
-          <span className="metric-value">{m.dust}</span>
-          <span className="metric-sub">({m.dust_value ?? '—'} ㎍/㎥)</span>
+          <span className="metric-label">초미세먼지</span>
+          <span className="metric-value">{m.dust_label ?? m.dust ?? '—'}</span>
+          <span className="metric-sub">
+            PM2.5 {m.dust_value != null ? `${m.dust_value} ㎍/㎥` : '—'}
+            {m.station ? ` (${m.station})` : ''}
+          </span>
         </div>
 
         <div className="metric-card glass">

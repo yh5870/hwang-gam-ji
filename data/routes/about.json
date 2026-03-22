@@ -1,5 +1,4 @@
 {
-  "__mock": true,
   "formula": "황감 지수 = (가시거리 km ÷ 50) × 100 (최대 100점)",
   "formula_note": "50km 이상 = 100점 만점. 60km·70km 이상 시 잭팟 이벤트 점수 적용.",
   "grade_guide": [

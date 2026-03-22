@@ -1,13 +1,21 @@
 /**
- * 기상청 API 연동
- * ① ASOS 시간자료: 시정(가시거리)
- * ② 단기예보: SKY, PTY, REH(습도)
+ * 공공데이터포털 API 연동
+ * ① 기상청 ASOS: 시정(가시거리)
+ * ② 기상청 단기예보: SKY, PTY, REH(습도) - 황령산 격자(98,75)
+ * ③ 부산광역시 대기질: 미세먼지(PM10), 초미세먼지(PM2.5) - 전포동 측정소 (황령산 봉수대 전포동 쪽)
  */
 
 const API_BASE =
-  import.meta.env.DEV ? '/api/kma/1360000' : 'http://apis.data.go.kr/1360000'
+  import.meta.env.DEV ? '/api/kma/1360000' : 'https://apis.data.go.kr/1360000'
+const BUSAN_AIR_BASE =
+  import.meta.env.DEV ? '/api/busan/6260000' : 'https://apis.data.go.kr/6260000'
+
 const ASOS_BASE = `${API_BASE}/AsosHourlyInfoService`
 const VILAGE_BASE = `${API_BASE}/VilageFcstInfoService_2.0`
+const AIR_QUALITY_BASE = `${BUSAN_AIR_BASE}/AirQualityInfoService`
+
+/** 전포동 측정소 검색 키워드 (황령산 봉수대 전포동 쪽) */
+const JEONPO_STATION_KEYWORDS = ['전포', '전포동', '부산진구']
 
 const BUSAN_STN = 159
 const HWANGNYEONG_NX = 98
@@ -46,8 +54,9 @@ function getLatestBaseTime() {
 }
 
 /**
- * ASOS 시간자료 - 부산(159) 시정(가시거리) 조회
- * vs 단위: m (미터). 50000 = 50km
+ * ASOS 시간자료(Hourly) - 부산(159) 시정(가시거리) 조회
+ * getWthrDataList + dateCd=HR = 시간자료 (실시간)
+ * ※ 데이터 15~20분 지연 → 현재 시각보다 1시간 전 요청 (확정된 데이터)
  */
 export async function fetchAsosVisibility(apiKey) {
   const now = new Date()
@@ -55,43 +64,30 @@ export async function fetchAsosVisibility(apiKey) {
   const m = String(now.getMonth() + 1).padStart(2, '0')
   const d = String(now.getDate()).padStart(2, '0')
   const date = `${y}${m}${d}`
-  const hour = String(now.getHours()).padStart(2, '0')
+  const currentHour = now.getHours()
+  const hourToRequest = Math.max(0, currentHour - 1)
+  const hour = String(hourToRequest).padStart(2, '0')
 
-  const params = new URLSearchParams({
-    serviceKey: apiKey,
-    pageNo: 1,
-    numOfRows: 1,
-    dataType: 'JSON',
-    dataCd: 'ASOS',
-    dateCd: 'HR',
-    startDt: date,
-    startHh: hour,
-    endDt: date,
-    endHh: hour,
-    stnIds: String(BUSAN_STN),
-  })
+  let result = await fetchAsosVisibilityWithTime(apiKey, date, hour)
+  if (result != null) return result
 
-  const url = `${ASOS_BASE}/getWthrDataList?${params}`
-  const res = await fetch(url)
-  const data = await res.json()
-
-  if (data.response?.header?.resultCode !== '00') {
-    throw new Error(data.response?.header?.resultMsg || 'ASOS API 오류')
+  for (let offset = 2; offset <= 5; offset++) {
+    const h = Math.max(0, currentHour - offset)
+    if (h === hourToRequest) continue
+    result = await fetchAsosVisibilityWithTime(apiKey, date, String(h).padStart(2, '0'))
+    if (result != null) return result
   }
 
-  const items = data.response?.body?.items?.item
-  if (!items || (Array.isArray(items) ? items.length === 0 : !items.vs)) {
-    const prevHour = now.getHours() - 1
-    if (prevHour < 0) return null
-    return fetchAsosVisibilityWithTime(apiKey, date, String(prevHour).padStart(2, '0'))
+  if (currentHour < 3) {
+    const yesterday = new Date(now)
+    yesterday.setDate(yesterday.getDate() - 1)
+    const yy = yesterday.getFullYear()
+    const ym = String(yesterday.getMonth() + 1).padStart(2, '0')
+    const yd = String(yesterday.getDate()).padStart(2, '0')
+    result = await fetchAsosVisibilityWithTime(apiKey, `${yy}${ym}${yd}`, '23')
+    if (result != null) return result
   }
-
-  const item = Array.isArray(items) ? items[0] : items
-  const vs = Number(item.vs)
-
-  if (Number.isNaN(vs) || vs < 0) return null
-
-  return vs / 1000
+  return null
 }
 
 async function fetchAsosVisibilityWithTime(apiKey, date, hour) {
@@ -112,6 +108,10 @@ async function fetchAsosVisibilityWithTime(apiKey, date, hour) {
   const url = `${ASOS_BASE}/getWthrDataList?${params}`
   const res = await fetch(url)
   const data = await res.json()
+
+  if (data.response?.header?.resultCode !== '00' && data.response?.header?.resultCode !== '03') {
+    return null
+  }
 
   const items = data.response?.body?.items?.item
   if (!items || (Array.isArray(items) ? items.length === 0 : !items.vs)) return null
@@ -174,19 +174,130 @@ function skyToText(sky) {
 }
 
 /**
+ * PM2.5 수치 → 황감지 dust 레벨 (hwangGamAnalysis 호환)
+ * - excellent/good: 15 이하
+ * - moderate: 16~35
+ * - bad: 36+
+ */
+function pm25ToDustLevel(pm25) {
+  if (pm25 == null || Number.isNaN(pm25)) return null
+  const v = Number(pm25)
+  if (v <= 15) return 'Good'
+  if (v <= 35) return 'Moderate'
+  return 'Bad'
+}
+
+/**
+ * PM2.5 수치 → 한글 등급 (UI 표시용)
+ */
+function pm25ToDustLabel(pm25) {
+  if (pm25 == null || Number.isNaN(pm25)) return null
+  const v = Number(pm25)
+  if (v <= 15) return '좋음'
+  if (v <= 35) return '보통'
+  if (v <= 75) return '나쁨'
+  return '매우나쁨'
+}
+
+/**
+ * 부산광역시 대기질 정보 조회 - 전포동 측정소 기준
+ * (황령산 봉수대가 전포동 쪽이므로 전포동 날씨·대기질 사용)
+ * 공공데이터포털 부산광역시_대기질 정보 조회 API
+ * ※ API는 전날 자료까지 제공 → controlnumber로 어제 23시 사용
+ */
+export async function fetchAirQuality(apiKey) {
+  const now = new Date()
+  const yesterday = new Date(now)
+  yesterday.setDate(yesterday.getDate() - 1)
+  const yyyy = yesterday.getFullYear()
+  const mm = String(yesterday.getMonth() + 1).padStart(2, '0')
+  const dd = String(yesterday.getDate()).padStart(2, '0')
+  const controlnumber = `${yyyy}${mm}${dd}23`
+
+  const params = new URLSearchParams({
+    serviceKey: apiKey,
+    pageNo: 1,
+    numOfRows: 100,
+    resultType: 'json',
+    controlnumber,
+  })
+
+  const url = `${AIR_QUALITY_BASE}/getAirQualityInfoClassifiedByStation?${params}`
+  const res = await fetch(url)
+  const data = await res.json()
+
+  const header = data.response?.header ?? data.getAirQualityInfoClassifiedByStationResponse?.header ?? data.header
+  const resultCode = header?.resultCode ?? data.resultCode
+  if (resultCode && resultCode !== '00' && resultCode !== '0' && resultCode !== '03') {
+    throw new Error(header?.resultMsg ?? data.resultMsg ?? '대기질 API 오류')
+  }
+
+  const body = data.response?.body ?? data.getAirQualityInfoClassifiedByStationResponse?.body ?? data.body
+  const rawItems = body?.items ?? body?.item
+  if (!rawItems) return null
+
+  const itemList = rawItems.item ?? rawItems
+  const items = Array.isArray(itemList) ? itemList : (itemList && typeof itemList === 'object' ? [itemList] : [])
+  if (!items.length) return null
+
+  const siteMatch = (site) => {
+    const s = String(site ?? '').trim()
+    return JEONPO_STATION_KEYWORDS.some((kw) => s.includes(kw))
+  }
+
+  const jeonpoItems = items.filter((it) => siteMatch(it.site ?? it.측정소명 ?? it.stationName ?? it.areaName))
+  const targets = jeonpoItems.length > 0 ? jeonpoItems : items
+
+  let pm25 = null
+  let pm10 = null
+  let stationName = '전포동'
+
+  for (const it of targets) {
+    const site = it.site ?? it.측정소명 ?? it.stationName ?? it.areaName
+    if (site) stationName = site
+    const repItem = String(it.repItem ?? '').toLowerCase()
+    const repVal = parsePmValue(it.repVal)
+    pm25 = pm25 ?? parsePmValue(it.pm25Value ?? it.pm25 ?? it.pm2_5 ?? it.초미세먼지 ?? ((repItem.includes('pm25') || repItem.includes('pm2.5') || repItem.includes('초미세')) ? repVal : null))
+    pm10 = pm10 ?? parsePmValue(it.pm10Value ?? it.pm10 ?? it.미세먼지 ?? (repItem.includes('pm10') || (repItem.includes('미세') && !repItem.includes('초')) ? repVal : null))
+  }
+
+  return {
+    pm25: pm25 ?? null,
+    pm10: pm10 ?? null,
+    dust: pm25 != null ? pm25ToDustLevel(pm25) : null,
+    dust_label: pm25 != null ? pm25ToDustLabel(pm25) : null,
+    station: stationName,
+  }
+}
+
+function parsePmValue(v) {
+  if (v == null || v === '' || v === '-') return null
+  const n = Number(v)
+  return Number.isNaN(n) ? null : n
+}
+
+/**
  * 황감지용 통합 날씨 데이터 조회
  */
 export async function fetchHwangGamWeather(apiKey) {
-  const [visibilityKm, vilage] = await Promise.all([
+  const [visibilityKm, vilage, air] = await Promise.all([
     fetchAsosVisibility(apiKey),
     fetchVilageFcst(apiKey),
+    fetchAirQuality(apiKey).catch(() => null),
   ])
+
+  const dustLevel = air?.dust ?? 'Moderate'
+  const dustValue = air?.pm25 ?? null
+  const dustLabel = air?.dust_label ?? (dustLevel === 'Good' ? '좋음' : dustLevel === 'Bad' ? '나쁨' : '보통')
+  const station = air?.station ?? null
 
   return {
     visibility_km: visibilityKm ?? 10,
     humidity: vilage?.reh ?? 50,
-    dust: 'Moderate',
-    dust_value: null,
+    dust: dustLevel,
+    dust_value: dustValue,
+    dust_label: dustLabel,
+    station,
     sky: vilage ? skyToText(vilage.sky) : '정보없음',
     pty: vilage?.pty ?? '0',
     wind_speed: null,

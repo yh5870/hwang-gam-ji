@@ -83,7 +83,7 @@ export default function Home() {
             <div className="skeleton">
               <div className="skeleton-countdown" />
               <div className="skeleton-gauge" />
-              <p className="loading-text">기상청 데이터 불러오는 중...</p>
+              <p className="loading-text">기상청 데이터를 불러오는 중...</p>
             </div>
           ) : (
             <div className="api-error">
