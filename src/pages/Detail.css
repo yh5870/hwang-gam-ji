@@ -1,0 +1,163 @@
+/* Detail - 2x2 그리드, bg-[#0f172a] 카드 */
+
+.detail-page {
+  min-height: 100%;
+  padding-bottom: 100px;
+  background: linear-gradient(180deg, #020617 0%, #0f172a 40%, #1e1b4b 100%);
+}
+
+.detail-page .page-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 4px;
+  color: var(--text-primary);
+}
+
+.detail-page .loading-text,
+.detail-page .api-error-text {
+  color: var(--text-secondary);
+  padding: 20px 0;
+}
+
+.updated {
+  font-size: 0.85rem;
+  color: var(--accent);
+  margin-bottom: 24px;
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.metric-card {
+  background: var(--bg-card-solid);
+  backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 
+    0 8px 32px 0 rgba(0, 0, 0, 0.8),
+    0 0 20px rgba(34, 211, 238, 0.06);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 120px;
+  border-radius: var(--radius);
+  transition: box-shadow 0.25s, border-color 0.25s;
+}
+
+.metric-card:hover {
+  box-shadow: 
+    0 8px 32px 0 rgba(0, 0, 0, 0.8),
+    0 0 28px rgba(34, 211, 238, 0.12);
+  border-color: rgba(34, 211, 238, 0.15);
+}
+
+.metric-card.primary {
+  grid-column: 1 / -1;
+  min-height: 160px;
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(15, 23, 42, 0.9));
+  border-color: rgba(34, 211, 238, 0.25);
+  box-shadow: 
+    0 8px 32px 0 rgba(0, 0, 0, 0.8), 
+    0 0 30px rgba(34, 211, 238, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.metric-card.primary:hover {
+  box-shadow: 
+    0 8px 32px 0 rgba(0, 0, 0, 0.8), 
+    0 0 40px rgba(34, 211, 238, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.metric-label {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.metric-value {
+  font-family: var(--font-mono);
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.metric-value.main {
+  font-size: 3.5rem;
+  line-height: 1;
+  color: var(--accent);
+  text-shadow: 0 0 20px var(--accent-glow);
+}
+
+.metric-unit,
+.metric-sub {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.metric-card.primary .metric-unit {
+  font-size: 1.25rem;
+  color: var(--accent);
+}
+
+/* 분석 결과 섹션 */
+.analysis-section {
+  margin-top: 24px;
+  padding: 24px;
+}
+
+.analysis-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--accent);
+  margin-bottom: 8px;
+}
+
+.analysis-message {
+  font-size: 1rem;
+  color: var(--text-primary);
+  margin-bottom: 20px;
+  line-height: 1.5;
+}
+
+.analysis-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.detail-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.detail-row.clear .detail-value {
+  color: var(--accent);
+}
+
+.detail-row.blurry .detail-value {
+  color: #fbbf24;
+}
+
+.detail-label {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.detail-value {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.detail-reason {
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin: 0;
+}

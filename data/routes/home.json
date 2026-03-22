@@ -1,0 +1,13 @@
+{
+  "__mock": { "mode": "jackpot_10k" },
+  "current": {
+    "score": 10000,
+    "visibility_km": 72.5,
+    "dust": "Clean",
+    "sky": "Clear",
+    "sunset_remaining": "01:24:05",
+    "is_jackpot": true,
+    "jackpot_level": 2
+  },
+  "message": "신의 영역 도달! 우주에서도 보일 조망입니다."
+}

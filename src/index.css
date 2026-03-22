@@ -1,0 +1,104 @@
+:root {
+  /* Midnight Busan Cityview - Premium Night Edition */
+  --bg-deep: #020617;
+  --bg-mid: #0f172a;
+  --bg-top: #1e1b4b;
+  --bg-card: rgba(30, 41, 59, 0.6);
+  --bg-card-solid: #0f172a;
+  --glass: rgba(30, 41, 59, 0.6);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.8);
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --accent: #22d3ee;
+  --accent-glow: rgba(34, 211, 238, 0.5);
+  --jackpot-gold: #fbbf24;
+  --radius: 16px;
+  --font: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', monospace;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+#root {
+  position: relative;
+  z-index: 1;
+}
+
+body {
+  font-family: var(--font);
+  background: 
+    linear-gradient(180deg, #020617 0%, #0f172a 40%, #1e1b4b 100%),
+    /* 미세 그리드 라인 (데이터 패널 느낌) */
+    linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+  background-size: 100% 100%, 24px 24px, 24px 24px;
+  background-attachment: fixed;
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  position: relative;
+}
+
+/* noise/grain 텍스처 오버레이 */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  opacity: 0.03;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* 별 스캐터 */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: 
+    radial-gradient(1px 1px at 10% 20%, rgba(255,255,255,0.4), transparent),
+    radial-gradient(1px 1px at 30% 40%, rgba(255,255,255,0.3), transparent),
+    radial-gradient(1.5px 1.5px at 50% 15%, rgba(255,255,255,0.35), transparent),
+    radial-gradient(1px 1px at 70% 60%, rgba(255,255,255,0.25), transparent),
+    radial-gradient(1px 1px at 85% 30%, rgba(255,255,255,0.3), transparent),
+    radial-gradient(1px 1px at 20% 80%, rgba(255,255,255,0.2), transparent),
+    radial-gradient(1px 1px at 60% 85%, rgba(255,255,255,0.25), transparent);
+  background-size: 200% 200%, 180% 180%, 220% 220%, 160% 160%, 190% 190%, 170% 170%, 210% 210%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+body {
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+/* Glass card - 배경과 분리된 투명 카드 (테두리 글로우, 상단 하이라이트) */
+.glass {
+  background: var(--glass);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius);
+  box-shadow: 
+    var(--glass-shadow),
+    0 0 20px rgba(34, 211, 238, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  transition: box-shadow 0.25s, border-color 0.25s;
+}
+
+.glass:hover {
+  box-shadow: 
+    var(--glass-shadow),
+    0 0 28px rgba(34, 211, 238, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  border-color: rgba(34, 211, 238, 0.15);
+}
