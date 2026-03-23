@@ -27,12 +27,16 @@ export function getSunsetForDate(date = new Date()) {
  */
 export function getTimeOfDay() {
   const now = new Date()
-  const { sunset } = getSunsetForDate(now)
+  const times = SunCalc.getTimes(now, HWANGNYEONG_LAT, HWANGNYEONG_LNG)
+  const sunrise = times.sunrise
+  const sunset = times.sunset
   const sunsetStart = new Date(sunset)
   sunsetStart.setMinutes(sunsetStart.getMinutes() - 30)
   const sunsetEnd = new Date(sunset)
   sunsetEnd.setMinutes(sunsetEnd.getMinutes() + 30)
 
+  // 자정~일출 전은 야간으로 본다.
+  if (now < sunrise) return 'after_sunset'
   if (now < sunsetStart) return 'before_sunset'
   if (now <= sunsetEnd) return 'sunset'
   return 'after_sunset'
