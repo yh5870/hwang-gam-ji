@@ -42,7 +42,7 @@ function getClothingRecommendation({ temperature, wind_speed, pty }) {
 }
 
 export default function Detail() {
-  const { metrics, analysis, loading, error, updatedAt } = useWeather()
+  const { metrics, analysis, loading, error, updatedAt, sunsetHHMM } = useWeather()
   const { state } = useLocation()
   const fromNav = state?.metrics ?? metrics
   const displayAnalysis = state?.analysis ?? analysis
@@ -71,7 +71,12 @@ export default function Detail() {
   return (
     <div className="detail-page">
       <h1 className="page-title">상세 지표</h1>
-      <p className="updated">최종 업데이트 {state?.updatedAt ?? updatedAt ?? '—'}</p>
+      <p className="updated">
+        최종 업데이트 {state?.updatedAt ?? updatedAt ?? '—'}
+        {(state?.sunsetHHMM ?? sunsetHHMM) && (
+          <span className="sunset-badge"> · 오늘 일몰 {state?.sunsetHHMM ?? sunsetHHMM}</span>
+        )}
+      </p>
 
       <div className="metrics-grid">
         <div className="metric-card glass primary">

@@ -16,7 +16,7 @@ function formatTime() {
 
 export default function Home() {
   const navigate = useNavigate()
-  const { metrics, analysis, loading, error, updatedAt, refresh } = useWeather()
+  const { metrics, analysis, loading, error, updatedAt, refresh, sunsetHHMM } = useWeather()
 
   const [state, setState] = useState('initial')
   const [displayScore, setDisplayScore] = useState(0)
@@ -157,13 +157,16 @@ export default function Home() {
                 </div>
               )}
               <p className="main-message">{analysis?.message}</p>
+              {sunsetHHMM && (
+                <p className="sunset-info">오늘 일몰 {sunsetHHMM}</p>
+              )}
             </section>
 
             <nav className="quick-nav">
               <Link
                 to="/detail"
                 className="btn glass"
-                state={{ metrics, analysis, updatedAt }}
+                state={{ metrics, analysis, updatedAt, sunsetHHMM }}
               >
                 상세보기
               </Link>

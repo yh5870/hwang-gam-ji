@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { WeatherProvider } from './contexts/WeatherContext'
+import ThemeByTime from './components/ThemeByTime'
 import './App.css'
 import Fireflies from './components/Fireflies'
 import Home from './pages/Home'
@@ -11,6 +12,7 @@ import TabBar from './components/TabBar'
 export default function App() {
   return (
     <WeatherProvider>
+      <ThemeByTime />
       <BrowserRouter>
         <div className="app">
           <Fireflies />

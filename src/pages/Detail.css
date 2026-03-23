@@ -25,6 +25,11 @@
   margin-bottom: 24px;
 }
 
+.updated .sunset-badge {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
 .metrics-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);

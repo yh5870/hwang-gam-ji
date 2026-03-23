@@ -1,11 +1,13 @@
 import { useEffect, useRef } from 'react'
+import { useWeather } from '../contexts/WeatherContext'
 
 /**
  * 야경·반딧불이 느낌의 움직이는 빛
- * 배경(#020617, #0f172a, #1e1b4b), accent(#22d3ee), 폰트색과 조화
+ * 일몰 전: 숨김, 일몰 시간: 따뜻한 색, 일몰 후: 기존 청록/보라
  */
 export default function Fireflies() {
   const canvasRef = useRef(null)
+  const { timeOfDay } = useWeather()
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -14,13 +16,6 @@ export default function Fireflies() {
     const ctx = canvas.getContext('2d')
     let animationId
     let fireflies = []
-
-    const colors = [
-      'rgba(34, 211, 238, 0.7)',   // accent cyan
-      'rgba(167, 139, 250, 0.6)',  // violet (배경 1e1b4b와 조화)
-      'rgba(241, 245, 249, 0.5)',  // text-primary 계열
-      'rgba(103, 232, 249, 0.55)', // lighter cyan
-    ]
 
     const resize = () => {
       canvas.width = window.innerWidth
@@ -31,6 +26,9 @@ export default function Fireflies() {
     const initFireflies = () => {
       fireflies = []
       const count = Math.min(35, Math.floor((canvas.width * canvas.height) / 35000))
+      const palette = timeOfDay === 'sunset'
+        ? ['rgba(251, 146, 60, 0.65)', 'rgba(251, 191, 36, 0.6)', 'rgba(253, 230, 138, 0.5)', 'rgba(234, 88, 12, 0.55)']
+        : ['rgba(34, 211, 238, 0.7)', 'rgba(167, 139, 250, 0.6)', 'rgba(241, 245, 249, 0.5)', 'rgba(103, 232, 249, 0.55)']
       for (let i = 0; i < count; i++) {
         fireflies.push({
           x: Math.random() * canvas.width,
@@ -38,7 +36,7 @@ export default function Fireflies() {
           vx: (Math.random() - 0.5) * 0.4,
           vy: (Math.random() - 0.5) * 0.3 - 0.1,
           size: 1 + Math.random() * 2,
-          color: colors[Math.floor(Math.random() * colors.length)],
+          color: palette[Math.floor(Math.random() * palette.length)],
           phase: Math.random() * Math.PI * 2,
           twinkleSpeed: 2 + Math.random() * 3,
         })
@@ -90,7 +88,7 @@ export default function Fireflies() {
       window.removeEventListener('resize', resize)
       cancelAnimationFrame(animationId)
     }
-  }, [])
+  }, [timeOfDay])
 
   return (
     <canvas

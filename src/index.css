@@ -46,7 +46,76 @@ body {
   color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
   position: relative;
+  transition: background 1.2s ease;
 }
+
+/* 일몰 전: 낮 느낌, 밝고 부드러운 배경 */
+body[data-time-of-day="before_sunset"] {
+  background: 
+    linear-gradient(180deg, #e0f2fe 0%, #bae6fd 25%, #7dd3fc 50%, #38bdf8 75%, #0ea5e9 100%),
+    linear-gradient(rgba(255,255,255,0.15) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.15) 1px, transparent 1px);
+  background-size: 100% 100%, 24px 24px, 24px 24px;
+  background-attachment: fixed;
+}
+
+body[data-time-of-day="before_sunset"] {
+  color: #0f172a;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --bg-card-solid: rgba(255, 255, 255, 0.75);
+  --glass: rgba(255, 255, 255, 0.5);
+  --accent: #0284c7;
+  --accent-glow: rgba(2, 132, 199, 0.4);
+}
+
+body[data-time-of-day="before_sunset"]::after {
+  opacity: 0.15;
+}
+
+body[data-time-of-day="before_sunset"] .fireflies-canvas {
+  opacity: 0;
+}
+
+body[data-time-of-day="before_sunset"] .description-box {
+  background: rgba(255, 255, 255, 0.6);
+  border-color: rgba(15, 23, 42, 0.12);
+}
+
+body[data-time-of-day="before_sunset"] .tab-bar {
+  background: rgba(255, 255, 255, 0.88);
+  border-color: rgba(15, 23, 42, 0.1);
+}
+
+body[data-time-of-day="before_sunset"] .tab-bar::before {
+  background: linear-gradient(90deg, transparent, rgba(2, 132, 199, 0.35), transparent);
+}
+
+body[data-time-of-day="before_sunset"] .tab-item.active {
+  background: rgba(2, 132, 199, 0.2);
+}
+
+body[data-time-of-day="before_sunset"] .metric-card.primary {
+  background: linear-gradient(135deg, rgba(255,255,255,0.9), rgba(255,255,255,0.8));
+  border-color: rgba(15, 23, 42, 0.12);
+}
+
+/* 일몰 시간대: 주황·빨강·노랑 일몰 느낌 */
+body[data-time-of-day="sunset"] {
+  background: 
+    linear-gradient(180deg, #1e1b4b 0%, #7c2d12 25%, #c2410c 40%, #ea580c 55%, #f59e0b 70%, #fbbf24 85%, #fde68a 100%),
+    linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px);
+  background-size: 100% 100%, 24px 24px, 24px 24px;
+  background-attachment: fixed;
+}
+
+body[data-time-of-day="sunset"] {
+  --accent: #fb923c;
+  --accent-glow: rgba(251, 146, 60, 0.5);
+}
+
+/* 일몰 후: 기존 테마 유지 (body 기본값) */
 
 /* noise/grain 텍스처 오버레이 */
 body::before {

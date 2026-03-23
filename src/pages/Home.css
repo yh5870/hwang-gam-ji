@@ -389,6 +389,13 @@
   color: var(--text-primary);
 }
 
+.description-box .sunset-info {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  margin-top: 10px;
+  font-weight: 500;
+}
+
 .home.jackpot .description-box .main-message,
 .home.jackpot-1k .description-box .main-message {
   filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.5));
