@@ -55,42 +55,47 @@ function getLatestBaseTime() {
 
 /**
  * ASOS 시간자료(Hourly) - 부산(159) 시정(가시거리) 조회
- * getWthrDataList + dateCd=HR = 시간자료
- * ※ 전일(D-1) 자료까지 제공, 전일 자료는 11시 이후 조회가능 (활용가이드)
+ * getWthrDataList + dateCd=HR = 시간자료 (실시간 Hourly)
+ * ※ 매 시 15~20분 경에 직전 정각 관측값 업데이트됨
  * ※ 시정(vs) 단위: 10m → km 변환: vs/100
- * ※ D-1 하루치 한 번에 조회 후 가장 최신 관측값 사용
+ * ※ 1순위: 오늘 1~2시간 전 / 2순위: 오늘 전체 / 3순위: 어제 (새벽 폴백)
  */
 export async function fetchAsosVisibility(apiKey) {
   const now = new Date()
   const currentHour = now.getHours()
-  const targetDate = new Date(now)
-  if (currentHour < 11) {
-    targetDate.setDate(targetDate.getDate() - 2)
-  } else {
-    targetDate.setDate(targetDate.getDate() - 1)
+  const today = {
+    y: now.getFullYear(),
+    m: String(now.getMonth() + 1).padStart(2, '0'),
+    d: String(now.getDate()).padStart(2, '0'),
   }
-  const y = targetDate.getFullYear()
-  const m = String(targetDate.getMonth() + 1).padStart(2, '0')
-  const d = String(targetDate.getDate()).padStart(2, '0')
-  const date = `${y}${m}${d}`
+  const dateToday = `${today.y}${today.m}${today.d}`
 
-  let result = await fetchAsosVisibilityDayRange(apiKey, date)
+  const yesterday = new Date(now)
+  yesterday.setDate(yesterday.getDate() - 1)
+  const dateYesterday = `${yesterday.getFullYear()}${String(yesterday.getMonth() + 1).padStart(2, '0')}${String(yesterday.getDate()).padStart(2, '0')}`
+
+  let result
+
+  for (let offset = 1; offset <= 3; offset++) {
+    const h = currentHour - offset
+    if (h >= 0) {
+      result = await fetchAsosVisibilitySingle(apiKey, dateToday, String(h).padStart(2, '0'))
+      if (result.value != null) return result
+    }
+  }
+
+  result = await fetchAsosVisibilityDayRange(apiKey, dateToday)
   if (result.value != null) return result
 
-  const dayBefore = new Date(targetDate)
-  dayBefore.setDate(dayBefore.getDate() - 1)
-  const yd = `${dayBefore.getFullYear()}${String(dayBefore.getMonth() + 1).padStart(2, '0')}${String(dayBefore.getDate()).padStart(2, '0')}`
-  result = await fetchAsosVisibilityDayRange(apiKey, yd)
-  if (result.value != null) return result
-
-  for (const h of [23, 22, 20, 17, 14, 11, 8]) {
-    result = await fetchAsosVisibilitySingle(apiKey, date, String(h).padStart(2, '0'))
+  for (const h of [23, 22, 21, 20, 18, 15, 12, 9, 6, 3, 0]) {
+    result = await fetchAsosVisibilitySingle(apiKey, dateYesterday, String(h).padStart(2, '0'))
     if (result.value != null) return result
   }
-  result = await fetchAsosVisibilitySingle(apiKey, yd, '23')
+
+  result = await fetchAsosVisibilityDayRange(apiKey, dateYesterday)
   if (result.value != null) return result
 
-  const lastError = result.error
+  const lastError = result?.error
   throw new Error(
     lastError
       ? `가시거리 데이터를 불러올 수 없습니다. (${lastError})`
@@ -384,6 +389,31 @@ function parsePmValue(v) {
   return Number.isNaN(n) ? null : n
 }
 
+/** observedAt(tm) 파싱 → 경과 시간(시간) 반환. tm 형식: "YYYY-MM-DD HH" 또는 "YYYY-MM-DD HH:MM" */
+function getHoursSinceObservation(tm) {
+  if (!tm) return null
+  let m = tm.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/)
+  if (!m) m = tm.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2})/)
+  if (!m) return null
+  const min = m[5] != null ? parseInt(m[5], 10) : 0
+  const obs = new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10), parseInt(m[4], 10), min)
+  return (Date.now() - obs.getTime()) / (1000 * 60 * 60)
+}
+
+/**
+ * 예보(SKY, REH) 기반 가시거리 추정 (Plan B: ASOS 비어있거나 12h+ 오래됐을 때)
+ * Est = (100-REH)/100 × SKY_Factor × 50
+ * SKY_Factor: 맑음 1.0, 구름많음 0.7, 흐림 0.4
+ */
+function estimateVisibilityFromForecast(sky, reh, dustBad) {
+  const s = Number(sky) || 1
+  const r = Math.max(0, Math.min(100, Number(reh) || 50))
+  const skyFactor = s === 1 ? 1.0 : s === 3 ? 0.7 : s === 4 ? 0.4 : 0.6
+  let est = ((100 - r) / 100) * skyFactor * 50
+  if (dustBad) est *= 0.75
+  return Math.round(Math.max(5, Math.min(50, est)) * 10) / 10
+}
+
 /**
  * 황감지용 통합 날씨 데이터 조회
  * 필수: 가시거리(ASOS), 단기예보(습도/하늘) - 실패 시 에러 throw (fallback 사용 안 함)
@@ -413,6 +443,16 @@ export async function fetchHwangGamWeather(apiKey) {
 
   const visibilityObservedAt = asosResult.observedAt || null
   const visibilityStation = asosResult.stationName || '부산 기상관측소'
+  const hoursSinceObs = getHoursSinceObservation(visibilityObservedAt)
+  const asosStale = hoursSinceObs != null && hoursSinceObs > 12
+
+  const estimatedVis = estimateVisibilityFromForecast(vilage.sky, vilage.reh, dustLevel === 'Bad')
+  const useEstimated = asosStale && vilage.reh != null
+
+  const visibilityKm = useEstimated ? estimatedVis : asosResult.value
+  const visibilitySource = useEstimated ? 'estimated' : 'observed'
+  const visibilityAsosValue = asosResult.value
+
   const fcstDate = vilage.fcstDate || null
   const fcstTime = vilage.fcstTime || null
   const fcstAt = fcstDate && fcstTime
@@ -420,7 +460,9 @@ export async function fetchHwangGamWeather(apiKey) {
     : null
 
   return {
-    visibility_km: asosResult.value,
+    visibility_km: visibilityKm,
+    visibility_source: visibilitySource,
+    visibility_asos_km: visibilityAsosValue,
     visibility_observed_at: visibilityObservedAt,
     visibility_station: visibilityStation,
     fcst_at: fcstAt,

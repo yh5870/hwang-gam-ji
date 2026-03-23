@@ -50,6 +50,12 @@ export function WeatherProvider({ children }) {
     load()
   }, [load])
 
+  useEffect(() => {
+    if (!apiKey) return
+    const interval = setInterval(load, 30 * 60 * 1000)
+    return () => clearInterval(interval)
+  }, [apiKey, load])
+
   const analysis = metrics ? getHwangGamAnalysis({
     visibility_km: metrics.visibility_km,
     humidity: metrics.humidity,
