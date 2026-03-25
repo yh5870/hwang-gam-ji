@@ -20,7 +20,7 @@ export default async function handler(req, res) {
 
     const upstream = await fetch(url.toString(), {
       method: 'GET',
-      headers: { 'accept': req.headers.accept || '*/*' },
+      headers: { accept: req.headers.accept || '*/*' },
     })
 
     const contentType = upstream.headers.get('content-type') || 'application/octet-stream'
