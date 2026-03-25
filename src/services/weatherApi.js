@@ -5,10 +5,10 @@
  * ③ 부산광역시 대기질: 미세먼지(PM10), 초미세먼지(PM2.5) - 전포동 측정소 (황령산 봉수대 전포동 쪽)
  */
 
-const API_BASE =
-  import.meta.env.DEV ? '/api/kma/1360000' : 'https://apis.data.go.kr/1360000'
-const BUSAN_AIR_BASE =
-  import.meta.env.DEV ? '/api/busan/6260000' : 'https://apis.data.go.kr/6260000'
+// Always use relative /api/* so production can proxy via Vercel serverless (avoids CORS).
+// In local dev, Vite dev-server proxy handles /api/* → apis.data.go.kr.
+const API_BASE = '/api/kma/1360000'
+const BUSAN_AIR_BASE = '/api/busan/6260000'
 
 const ASOS_BASE = `${API_BASE}/AsosHourlyInfoService`
 const VILAGE_BASE = `${API_BASE}/VilageFcstInfoService_2.0`
@@ -26,8 +26,15 @@ const HWANGNYEONG_NY = 75
  * 발표시각: 02, 05, 08, 11, 14, 17, 20, 23 (KST)
  * 데이터는 발표 후 30~40분 정도에 제공됨
  */
+function nowKST() {
+  // KMA publish times are KST. Use KST consistently regardless of user locale/timezone.
+  const d = new Date()
+  const utcMs = d.getTime() + d.getTimezoneOffset() * 60 * 1000
+  return new Date(utcMs + 9 * 60 * 60 * 1000)
+}
+
 function getLatestBaseTime() {
-  const now = new Date()
+  const now = nowKST()
   const hours = [23, 20, 17, 14, 11, 8, 5, 2]
   const currentHour = now.getHours()
   const currentMin = now.getMinutes()
@@ -61,7 +68,7 @@ function getLatestBaseTime() {
  * ※ 1순위: 오늘 1~2시간 전 / 2순위: 오늘 전체 / 3순위: 어제 (새벽 폴백)
  */
 export async function fetchAsosVisibility(apiKey) {
-  const now = new Date()
+  const now = nowKST()
   const currentHour = now.getHours()
   const today = {
     y: now.getFullYear(),
@@ -249,7 +256,7 @@ export async function fetchVilageFcst(apiKey) {
     bySlot[key][it.category] = it.fcstValue
   }
 
-  const now = new Date()
+  const now = nowKST()
   const slots = Object.entries(bySlot)
     .map(([key, vals]) => {
       const [d, t] = key.split('-')
@@ -319,7 +326,7 @@ function pm25ToDustLabel(pm25) {
  * ※ API는 전날 자료까지 제공 → controlnumber로 어제 23시 사용
  */
 export async function fetchAirQuality(apiKey) {
-  const now = new Date()
+  const now = nowKST()
   const yesterday = new Date(now)
   yesterday.setDate(yesterday.getDate() - 1)
   const yyyy = yesterday.getFullYear()
@@ -396,8 +403,10 @@ function getHoursSinceObservation(tm) {
   if (!m) m = tm.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2})/)
   if (!m) return null
   const min = m[5] != null ? parseInt(m[5], 10) : 0
-  const obs = new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10), parseInt(m[4], 10), min)
-  return (Date.now() - obs.getTime()) / (1000 * 60 * 60)
+  // ASOS tm is effectively KST local time. Compare in KST to avoid timezone drift.
+  const obsKst = new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10), parseInt(m[4], 10), min)
+  const now = nowKST()
+  return (now.getTime() - obsKst.getTime()) / (1000 * 60 * 60)
 }
 
 /**
@@ -514,8 +523,8 @@ export async function fetchForecast(apiKey) {
     byTime[key][it.category] = it.fcstValue
   }
 
-  const now = new Date()
-  const sorted = Object.entries(byTime)
+  const now = nowKST()
+  const sortedAll = Object.entries(byTime)
     .map(([key, vals]) => {
       const [fd, ft] = key.split('-')
       const h = parseInt(ft.slice(0, 2), 10)
@@ -523,11 +532,13 @@ export async function fetchForecast(apiKey) {
       return { key, vals, slotDate }
     })
     .sort((a, b) => a.slotDate - b.slotDate)
-    .slice(0, 24)
 
-  const futureIdx = sorted.findIndex((s) => s.slotDate > now)
-  const currentIdx = futureIdx > 0 ? futureIdx - 1 : futureIdx === 0 ? 0 : sorted.length - 1
-  const reordered = [...sorted.slice(currentIdx), ...sorted.slice(0, currentIdx)].slice(0, 24)
+  if (!sortedAll.length) return []
+
+  const futureIdx = sortedAll.findIndex((s) => s.slotDate > now)
+  const currentIdx = futureIdx > 0 ? futureIdx - 1 : futureIdx === 0 ? 0 : sortedAll.length - 1
+  // Take 24 slots starting from "now" slot (wrap around).
+  const reordered = [...sortedAll.slice(currentIdx), ...sortedAll.slice(0, currentIdx)].slice(0, 24)
 
   return reordered.map((entry, i) => {
     const { key, vals } = entry

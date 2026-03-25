@@ -20,14 +20,12 @@ export function WeatherProvider({ children }) {
   const [error, setError] = useState(null)
   const [updatedAt, setUpdatedAt] = useState(null)
 
+  // Optional: In production on Vercel, API key can live server-side as KMA_API_KEY.
+  // Keeping VITE_KMA_API_KEY still supports local dev without serverless functions.
   const apiKey = (import.meta.env.VITE_KMA_API_KEY || '').trim()
 
   const load = useCallback(async () => {
-    if (!apiKey) {
-      setError('API 키가 설정되지 않았습니다. .env에 VITE_KMA_API_KEY를 추가하세요.')
-      setLoading(false)
-      return
-    }
+    // If apiKey is empty, the /api proxy may still inject KMA_API_KEY server-side (production).
 
     setLoading(true)
     setError(null)
@@ -57,7 +55,7 @@ export function WeatherProvider({ children }) {
     } finally {
       setLoading(false)
     }
-  }, [apiKey])
+  }, [apiKey, sunsetStr, sunsetHHMM, timeOfDay])
 
   useEffect(() => {
     load()
@@ -65,7 +63,8 @@ export function WeatherProvider({ children }) {
 
   useEffect(() => {
     if (!apiKey) return
-    const interval = setInterval(load, 30 * 60 * 1000)
+    // KMA updates are hourly-ish; poll often enough to catch new data.
+    const interval = setInterval(load, 10 * 60 * 1000)
     return () => clearInterval(interval)
   }, [apiKey, load])
 
