@@ -22,10 +22,15 @@ export default async function handler(req, res) {
   try {
     if (String(req.query?.debug ?? '') === '1') {
       const kma = process.env.KMA_API_KEY || ''
+      const tailCodes =
+        kma.length > 0
+          ? [...kma.slice(Math.max(0, kma.length - 8))].map((ch) => ch.charCodeAt(0))
+          : []
       return res.status(200).json({
         hasKmaKey: Boolean(kma),
         kmaKeyLen: kma.length,
         kmaKeySha256: await sha256Hex(kma),
+        kmaTailCodes: tailCodes,
       })
     }
 
