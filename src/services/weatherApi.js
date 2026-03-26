@@ -93,13 +93,16 @@ export async function fetchAsosVisibility(apiKey) {
   }
   const dateToday = `${today.y}${today.m}${today.d}`
 
+  // 1) Prefer today's data first.
+  // If KMA hasn't published today's HR data yet (common), this may return NODATA.
+  let result = await fetchAsosVisibilityRangeLatest(apiKey, dateToday, '00', dateToday, '23', 48)
+  if (result?.value != null) return result
+
+  // 2) Fallback to yesterday (latest available observation).
   const yesterday = new Date(now)
   yesterday.setDate(yesterday.getDate() - 1)
   const dateYesterday = `${yesterday.getFullYear()}${String(yesterday.getMonth() + 1).padStart(2, '0')}${String(yesterday.getDate()).padStart(2, '0')}`
-
-  // Prefer the newest observation available in the last ~30 hours.
-  // This avoids "yesterday 23:00 fixed" fallbacks when today's data is delayed.
-  const result = await fetchAsosVisibilityRangeLatest(apiKey, dateYesterday, '00', dateToday, '23', 72)
+  result = await fetchAsosVisibilityRangeLatest(apiKey, dateYesterday, '00', dateYesterday, '23', 48)
   if (result?.value != null) return result
 
   const lastError = result?.error
@@ -490,14 +493,11 @@ function estimateVisibilityFromForecast(sky, reh, dustBad) {
  */
 export async function fetchHwangGamWeather(apiKey) {
   const [asosResult, vilage, air] = await Promise.all([
-    fetchAsosVisibility(apiKey),
+    fetchAsosVisibility(apiKey).catch(() => null),
     fetchVilageFcst(apiKey),
     fetchAirQuality(apiKey).catch(() => null),
   ])
 
-  if (!asosResult || asosResult.value == null) {
-    throw new Error('가시거리 데이터를 불러올 수 없습니다.')
-  }
   if (!vilage) {
     throw new Error('습도·하늘 데이터를 불러올 수 없습니다. 단기예보 API에서 응답이 없습니다.')
   }
@@ -510,18 +510,20 @@ export async function fetchHwangGamWeather(apiKey) {
   const tempFromVilage = vilage.tmp != null ? Number(vilage.tmp) : null
   const windFromVilage = vilage.wsd != null ? Number(vilage.wsd) : null
 
-  const visibilityObservedAt = asosResult.observedAt || null
-  const visibilityStation = asosResult.stationName || '부산 기상관측소'
+  const visibilityObservedAt = asosResult?.observedAt || null
+  const visibilityStation = asosResult?.stationName || '부산 기상관측소'
+  const observedVisibilityKm = asosResult?.value ?? null
   const hoursSinceObs = getHoursSinceObservation(visibilityObservedAt)
   // Be conservative about switching to estimated visibility; ASOS can be delayed and still useful.
   const asosStale = hoursSinceObs != null && hoursSinceObs > 24
 
   const estimatedVis = estimateVisibilityFromForecast(vilage.sky, vilage.reh, dustLevel === 'Bad')
-  const useEstimated = asosStale && vilage.reh != null
+  const hasObserved = observedVisibilityKm != null
+  const useEstimated = !hasObserved || (asosStale && vilage.reh != null)
 
-  const visibilityKm = useEstimated ? estimatedVis : asosResult.value
+  const visibilityKm = useEstimated ? estimatedVis : observedVisibilityKm
   const visibilitySource = useEstimated ? 'estimated' : 'observed'
-  const visibilityAsosValue = asosResult.value
+  const visibilityAsosValue = observedVisibilityKm
 
   const fcstDate = vilage.fcstDate || null
   const fcstTime = vilage.fcstTime || null
@@ -532,6 +534,9 @@ export async function fetchHwangGamWeather(apiKey) {
   return {
     visibility_km: visibilityKm,
     visibility_source: visibilitySource,
+    // New: expose both observed & estimated explicitly (UI can show both).
+    visibility_observed_km: observedVisibilityKm,
+    visibility_estimated_km: estimatedVis,
     visibility_asos_km: visibilityAsosValue,
     visibility_observed_at: visibilityObservedAt,
     visibility_station: visibilityStation,

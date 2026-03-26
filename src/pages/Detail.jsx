@@ -84,17 +84,22 @@ export default function Detail() {
           <span className="metric-value main">{m.visibility_km}</span>
           <span className="metric-unit">km</span>
           <span className="metric-sub metric-source">
-            {(m.visibility_source || 'observed') === 'estimated' ? (
-              <>예상값 (습도·하늘 예보 기준) · {m.fcst_at || '현재 시간대 예보'}
-                {m.visibility_asos_km != null && m.visibility_observed_at && (
-                  <><br />참고: {formatObservedAt(m.visibility_observed_at)} {m.visibility_asos_km}km</>
-                )}
-              </>
-            ) : (
-              <>{m.visibility_station || '부산 기상관측소'}
-                {m.visibility_observed_at ? ` · ${formatObservedAt(m.visibility_observed_at)}` : ''}
-              </>
-            )}
+            <>
+              {m.visibility_observed_km != null ? (
+                <>
+                  실측 {m.visibility_observed_km}km · {m.visibility_station || '부산 기상관측소'}
+                  {m.visibility_observed_at ? ` · ${formatObservedAt(m.visibility_observed_at)}` : ''}
+                </>
+              ) : (
+                <>실측값 없음 (기상청 제공 지연 가능)</>
+              )}
+              {m.visibility_estimated_km != null && (
+                <>
+                  <br />
+                  추정 {m.visibility_estimated_km}km · {m.fcst_at || '현재 시간대 예보'} (습도·하늘·먼지 반영)
+                </>
+              )}
+            </>
           </span>
         </div>
 
