@@ -5,15 +5,10 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      '/api/kma': {
+      '/api': {
         target: 'https://apis.data.go.kr',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/kma/, ''),
-      },
-      '/api/busan': {
-        target: 'https://apis.data.go.kr',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/busan/, ''),
+        rewrite: (path) => path.replace(/^\/api/, ''),
       },
     },
   },

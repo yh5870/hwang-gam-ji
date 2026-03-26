@@ -5,14 +5,31 @@
  * ③ 부산광역시 대기질: 미세먼지(PM10), 초미세먼지(PM2.5) - 전포동 측정소 (황령산 봉수대 전포동 쪽)
  */
 
-// Always use relative /api/* so production can proxy via Vercel serverless (avoids CORS).
-// In local dev, Vite dev-server proxy handles /api/* → apis.data.go.kr.
-const API_BASE = '/api/kma/1360000'
-const BUSAN_AIR_BASE = '/api/busan/6260000'
+const DATA_GO_KR = 'https://apis.data.go.kr'
 
-const ASOS_BASE = `${API_BASE}/AsosHourlyInfoService`
-const VILAGE_BASE = `${API_BASE}/VilageFcstInfoService_2.0`
-const AIR_QUALITY_BASE = `${BUSAN_AIR_BASE}/AirQualityInfoService`
+const ASOS_BASE = `${DATA_GO_KR}/1360000/AsosHourlyInfoService`
+const VILAGE_BASE = `${DATA_GO_KR}/1360000/VilageFcstInfoService_2.0`
+const AIR_QUALITY_BASE = `${DATA_GO_KR}/6260000/AirQualityInfoService`
+
+function buildProxyUrl(absoluteUrl) {
+  const u = new URL('/api/proxy', 'http://local.invalid')
+  u.searchParams.set('url', absoluteUrl)
+  return `${u.pathname}${u.search}`
+}
+
+async function fetchDataGoKrJson(absoluteUrl) {
+  const res = await fetch(import.meta.env.PROD ? buildProxyUrl(absoluteUrl) : absoluteUrl)
+  const text = await res.text()
+  const trimmed = text.trimStart()
+  if (trimmed.startsWith('<') || trimmed.startsWith('<!')) {
+    throw new Error('공공데이터포털 프록시가 HTML을 반환했습니다. (배포/라우팅 문제 가능)')
+  }
+  try {
+    return JSON.parse(text)
+  } catch {
+    throw new Error(text.slice(0, 200) || '공공데이터포털 응답 파싱 실패')
+  }
+}
 
 /** 전포동 측정소 검색 키워드 (황령산 봉수대 전포동 쪽) */
 const JEONPO_STATION_KEYWORDS = ['전포', '전포동', '부산진구']
@@ -127,8 +144,7 @@ async function fetchAsosVisibilitySingle(apiKey, date, hour) {
   })
   const url = `${ASOS_BASE}/getWthrDataList?${params}`
   try {
-    const res = await fetch(url)
-    const data = await res.json()
+    const data = await fetchDataGoKrJson(url)
     const header = data.response?.header
     const resultCode = String(header?.resultCode ?? '')
     if (resultCode !== '00' && resultCode !== '0') return { value: null, error: header?.resultMsg }
@@ -168,11 +184,9 @@ async function fetchAsosVisibilityDayRange(apiKey, date) {
   })
 
   const url = `${ASOS_BASE}/getWthrDataList?${params}`
-  let res
   let data
   try {
-    res = await fetch(url)
-    data = await res.json()
+    data = await fetchDataGoKrJson(url)
   } catch (e) {
     return { value: null, error: `네트워크 오류: ${e?.message || '연결 실패'}` }
   }
@@ -238,8 +252,7 @@ export async function fetchVilageFcst(apiKey) {
   })
 
   const url = `${VILAGE_BASE}/getVilageFcst?${params}`
-  const res = await fetch(url)
-  const data = await res.json()
+  const data = await fetchDataGoKrJson(url)
 
   const fcstResultCode = String(data.response?.header?.resultCode ?? '')
   if (fcstResultCode !== '00' && fcstResultCode !== '0') {
@@ -343,8 +356,7 @@ export async function fetchAirQuality(apiKey) {
   })
 
   const url = `${AIR_QUALITY_BASE}/getAirQualityInfoClassifiedByStation?${params}`
-  const res = await fetch(url)
-  const data = await res.json()
+  const data = await fetchDataGoKrJson(url)
 
   const header = data.response?.header ?? data.getAirQualityInfoClassifiedByStationResponse?.header ?? data.header
   const resultCode = header?.resultCode ?? data.resultCode
@@ -505,8 +517,7 @@ export async function fetchForecast(apiKey) {
   })
 
   const url = `${VILAGE_BASE}/getVilageFcst?${params}`
-  const res = await fetch(url)
-  const data = await res.json()
+  const data = await fetchDataGoKrJson(url)
 
   const forecastResultCode = String(data.response?.header?.resultCode ?? '')
   if (forecastResultCode !== '00' && forecastResultCode !== '0') {
