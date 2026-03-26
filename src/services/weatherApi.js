@@ -86,7 +86,6 @@ function getLatestBaseTime() {
  */
 export async function fetchAsosVisibility(apiKey) {
   const now = nowKST()
-  const currentHour = now.getHours()
   const today = {
     y: now.getFullYear(),
     m: String(now.getMonth() + 1).padStart(2, '0'),
@@ -98,26 +97,10 @@ export async function fetchAsosVisibility(apiKey) {
   yesterday.setDate(yesterday.getDate() - 1)
   const dateYesterday = `${yesterday.getFullYear()}${String(yesterday.getMonth() + 1).padStart(2, '0')}${String(yesterday.getDate()).padStart(2, '0')}`
 
-  let result
-
-  for (let offset = 1; offset <= 3; offset++) {
-    const h = currentHour - offset
-    if (h >= 0) {
-      result = await fetchAsosVisibilitySingle(apiKey, dateToday, String(h).padStart(2, '0'))
-      if (result.value != null) return result
-    }
-  }
-
-  result = await fetchAsosVisibilityDayRange(apiKey, dateToday)
-  if (result.value != null) return result
-
-  for (const h of [23, 22, 21, 20, 18, 15, 12, 9, 6, 3, 0]) {
-    result = await fetchAsosVisibilitySingle(apiKey, dateYesterday, String(h).padStart(2, '0'))
-    if (result.value != null) return result
-  }
-
-  result = await fetchAsosVisibilityDayRange(apiKey, dateYesterday)
-  if (result.value != null) return result
+  // Prefer the newest observation available in the last ~30 hours.
+  // This avoids "yesterday 23:00 fixed" fallbacks when today's data is delayed.
+  const result = await fetchAsosVisibilityRangeLatest(apiKey, dateYesterday, '00', dateToday, '23', 72)
+  if (result?.value != null) return result
 
   const lastError = result?.error
   throw new Error(
@@ -125,6 +108,71 @@ export async function fetchAsosVisibility(apiKey) {
       ? `가시거리 데이터를 불러올 수 없습니다. (${lastError})`
       : '가시거리 데이터를 불러올 수 없습니다. 기상청 ASOS API에서 응답이 없습니다.',
   )
+}
+
+/** 2일 범위 조회 후 가장 최신(마지막) 관측값 반환 */
+async function fetchAsosVisibilityRangeLatest(apiKey, startDt, startHh, endDt, endHh, numRows) {
+  const params = new URLSearchParams({
+    serviceKey: apiKey,
+    pageNo: 1,
+    numOfRows: String(numRows ?? 72),
+    dataType: 'JSON',
+    dataCd: 'ASOS',
+    dateCd: 'HR',
+    startDt,
+    startHh,
+    endDt,
+    endHh,
+    stnIds: String(BUSAN_STN),
+  })
+
+  const url = `${ASOS_BASE}/getWthrDataList?${params}`
+  let data
+  try {
+    data = await fetchDataGoKrJson(url)
+  } catch (e) {
+    return { value: null, error: `네트워크 오류: ${e?.message || '연결 실패'}` }
+  }
+
+  const header = data.response?.header
+  const resultCode = String(header?.resultCode ?? '')
+  const resultMsg = header?.resultMsg || ''
+  if (resultCode !== '00' && resultCode !== '0') {
+    if (resultCode === '03') {
+      return { value: null, error: resultMsg || '해당 시간 데이터 없음 (NODATA_ERROR)' }
+    }
+    return { value: null, error: resultMsg || `API 오류 (코드: ${resultCode})` }
+  }
+
+  const items = data.response?.body?.items?.item
+  if (!items || (Array.isArray(items) && items.length === 0)) {
+    return { value: null, error: '응답에 데이터 없음' }
+  }
+
+  const list = Array.isArray(items) ? items : [items]
+  const withVs = list
+    .filter((it) => it != null && it.vs != null && it.vs !== '')
+    .sort((a, b) => (b.tm || '').localeCompare(a.tm || ''))
+
+  const item = withVs[0]
+  if (!item) return { value: null, error: '시정(vs) 값 없음' }
+
+  const vs = Number(item.vs)
+  if (Number.isNaN(vs) || vs < 0) {
+    return { value: null, error: `잘못된 시정 값: ${item.vs}` }
+  }
+
+  const ta = item.ta != null && item.ta !== '' ? Number(item.ta) : null
+  const ws = item.ws != null && item.ws !== '' ? Number(item.ws) : null
+
+  return {
+    value: vs / 100,
+    temperature: !Number.isNaN(ta) ? ta : null,
+    wind_speed: !Number.isNaN(ws) ? ws : null,
+    observedAt: item.tm || null,
+    stationName: item.stnNm || '부산',
+    error: null,
+  }
 }
 
 /** 단일 시각 조회 (폴백용) */
@@ -465,7 +513,8 @@ export async function fetchHwangGamWeather(apiKey) {
   const visibilityObservedAt = asosResult.observedAt || null
   const visibilityStation = asosResult.stationName || '부산 기상관측소'
   const hoursSinceObs = getHoursSinceObservation(visibilityObservedAt)
-  const asosStale = hoursSinceObs != null && hoursSinceObs > 12
+  // Be conservative about switching to estimated visibility; ASOS can be delayed and still useful.
+  const asosStale = hoursSinceObs != null && hoursSinceObs > 24
 
   const estimatedVis = estimateVisibilityFromForecast(vilage.sky, vilage.reh, dustLevel === 'Bad')
   const useEstimated = asosStale && vilage.reh != null
