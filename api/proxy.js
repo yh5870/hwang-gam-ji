@@ -7,12 +7,6 @@ function isAllowedDataGoKrUrl(u) {
   }
 }
 
-async function sha256Hex(input) {
-  const data = new TextEncoder().encode(input)
-  const digest = await crypto.subtle.digest('SHA-256', data)
-  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('')
-}
-
 export default async function handler(req, res) {
   if (req.method && req.method !== 'GET') {
     res.setHeader('allow', 'GET')
@@ -20,20 +14,6 @@ export default async function handler(req, res) {
   }
 
   try {
-    if (String(req.query?.debug ?? '') === '1') {
-      const kma = process.env.KMA_API_KEY || ''
-      const tailCodes =
-        kma.length > 0
-          ? [...kma.slice(Math.max(0, kma.length - 8))].map((ch) => ch.charCodeAt(0))
-          : []
-      return res.status(200).json({
-        hasKmaKey: Boolean(kma),
-        kmaKeyLen: kma.length,
-        kmaKeySha256: await sha256Hex(kma),
-        kmaTailCodes: tailCodes,
-      })
-    }
-
     const raw = String(req.query?.url ?? '')
     if (!raw) {
       return res.status(400).json({ error: 'missing_url' })
@@ -50,8 +30,13 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'url_not_allowed' })
     }
 
-    if (!target.searchParams.get('serviceKey') && process.env.KMA_API_KEY) {
-      target.searchParams.set('serviceKey', process.env.KMA_API_KEY)
+    const kmaKey = String(process.env.KMA_API_KEY || '')
+      .trim()
+      .replace(/\r/g, '')
+      .replace(/\n/g, '')
+
+    if (!target.searchParams.get('serviceKey') && kmaKey) {
+      target.searchParams.set('serviceKey', kmaKey)
     }
 
     const upstream = await fetch(target.toString(), {
