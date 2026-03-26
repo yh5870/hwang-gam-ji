@@ -7,6 +7,12 @@ function isAllowedDataGoKrUrl(u) {
   }
 }
 
+async function sha256Hex(input) {
+  const data = new TextEncoder().encode(input)
+  const digest = await crypto.subtle.digest('SHA-256', data)
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('')
+}
+
 export default async function handler(req, res) {
   if (req.method && req.method !== 'GET') {
     res.setHeader('allow', 'GET')
@@ -19,6 +25,7 @@ export default async function handler(req, res) {
       return res.status(200).json({
         hasKmaKey: Boolean(kma),
         kmaKeyLen: kma.length,
+        kmaKeySha256: await sha256Hex(kma),
       })
     }
 
