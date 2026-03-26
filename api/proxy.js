@@ -14,6 +14,14 @@ export default async function handler(req, res) {
   }
 
   try {
+    if (String(req.query?.debug ?? '') === '1') {
+      const kma = process.env.KMA_API_KEY || ''
+      return res.status(200).json({
+        hasKmaKey: Boolean(kma),
+        kmaKeyLen: kma.length,
+      })
+    }
+
     const raw = String(req.query?.url ?? '')
     if (!raw) {
       return res.status(400).json({ error: 'missing_url' })
