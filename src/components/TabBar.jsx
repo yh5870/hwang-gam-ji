@@ -6,7 +6,7 @@ export default function TabBar() {
     { to: '/', label: '홈', icon: '◆' },
     { to: '/detail', label: '상세' },
     { to: '/forecast', label: '예측' },
-    { to: '/about', label: '가이드' },
+    { to: '/map', label: '지도' },
   ]
 
   return (

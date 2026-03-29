@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { WeatherProvider } from './contexts/WeatherContext'
 import ThemeByTime from './components/ThemeByTime'
 import './App.css'
@@ -6,7 +6,7 @@ import Fireflies from './components/Fireflies'
 import Home from './pages/Home'
 import Detail from './pages/Detail'
 import Forecast from './pages/Forecast'
-import About from './pages/About'
+import MapPage from './pages/MapPage'
 import TabBar from './components/TabBar'
 
 export default function App() {
@@ -21,7 +21,8 @@ export default function App() {
               <Route path="/" element={<Home />} />
               <Route path="/detail" element={<Detail />} />
               <Route path="/forecast" element={<Forecast />} />
-              <Route path="/about" element={<About />} />
+              <Route path="/map" element={<MapPage />} />
+              <Route path="/about" element={<Navigate to="/map" replace />} />
             </Routes>
           </main>
           <TabBar />

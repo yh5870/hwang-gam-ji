@@ -24,10 +24,22 @@ async function fetchDataGoKrJson(absoluteUrl) {
   if (trimmed.startsWith('<') || trimmed.startsWith('<!')) {
     throw new Error('공공데이터포털 프록시가 HTML을 반환했습니다. (배포/라우팅 문제 가능)')
   }
+  const lower = text.toLowerCase()
+  if (res.status === 429 || lower.includes('rate limit') || lower.includes('traffic overload')) {
+    throw new Error(
+      '기상·대기질 API 호출 한도에 걸렸습니다. 잠시 후 다시 시도해 주세요. (하루 무료 호출 수 제한)',
+    )
+  }
   try {
     return JSON.parse(text)
   } catch {
-    throw new Error(text.slice(0, 200) || '공공데이터포털 응답 파싱 실패')
+    const hint = text.slice(0, 200)
+    if (hint.toLowerCase().includes('rate limit')) {
+      throw new Error(
+        '기상·대기질 API 호출 한도에 걸렸습니다. 잠시 후 다시 시도해 주세요. (하루 무료 호출 수 제한)',
+      )
+    }
+    throw new Error(hint || '공공데이터포털 응답 파싱 실패')
   }
 }
 
@@ -284,13 +296,11 @@ async function fetchAsosVisibilityDayRange(apiKey, date) {
   }
 }
 
-/**
- * 단기예보 - 황령산 격자(98, 75) SKY, PTY, REH 조회
- * ※ 현재 시간에 해당하는 예보 슬롯을 사용 (14시 고정 아님)
- */
-export async function fetchVilageFcst(apiKey) {
-  const { base_date, base_time } = getLatestBaseTime()
+/** 동일 시각에 단기예보 HTTP를 1번만 쓰기 위한 in-flight 공유 (홈+예보 중복 제거) */
+let vilageItemsInflight = null
 
+async function loadVilageFcstItemsRaw(apiKey) {
+  const { base_date, base_time } = getLatestBaseTime()
   const params = new URLSearchParams({
     serviceKey: apiKey,
     pageNo: 1,
@@ -301,25 +311,38 @@ export async function fetchVilageFcst(apiKey) {
     nx: String(HWANGNYEONG_NX),
     ny: String(HWANGNYEONG_NY),
   })
-
   const url = `${VILAGE_BASE}/getVilageFcst?${params}`
   const data = await fetchDataGoKrJson(url)
-
   const fcstResultCode = String(data.response?.header?.resultCode ?? '')
   if (fcstResultCode !== '00' && fcstResultCode !== '0') {
-    throw new Error(data.response?.header?.resultMsg || '단기예보 API 오류')
+    const raw = data.response?.header?.resultMsg || '단기예보 API 오류'
+    const msg = /rate limit|traffic overload/i.test(String(raw))
+      ? '기상·대기질 API 호출 한도에 걸렸습니다. 잠시 후 다시 시도해 주세요. (일일 무료 호출 제한)'
+      : raw
+    throw new Error(msg)
   }
-
   const items = data.response?.body?.items?.item
-  if (!items || !items.length) return null
+  if (!items || !items.length) return []
+  return Array.isArray(items) ? items : [items]
+}
 
+async function getVilageFcstItemsShared(apiKey) {
+  if (!vilageItemsInflight) {
+    vilageItemsInflight = loadVilageFcstItemsRaw(apiKey).finally(() => {
+      vilageItemsInflight = null
+    })
+  }
+  return vilageItemsInflight
+}
+
+function parseCurrentVilageFromItems(items) {
+  if (!items || !items.length) return null
   const bySlot = {}
   for (const it of items) {
     const key = `${it.fcstDate}-${it.fcstTime}`
     if (!bySlot[key]) bySlot[key] = {}
     bySlot[key][it.category] = it.fcstValue
   }
-
   const now = nowKST()
   const slots = Object.entries(bySlot)
     .map(([key, vals]) => {
@@ -347,6 +370,15 @@ export async function fetchVilageFcst(apiKey) {
     fcstDate,
     fcstTime,
   }
+}
+
+/**
+ * 단기예보 - 황령산 격자(98, 75) SKY, PTY, REH 조회
+ * ※ 현재 시간에 해당하는 예보 슬롯을 사용 (14시 고정 아님)
+ */
+export async function fetchVilageFcst(apiKey) {
+  const items = await getVilageFcstItemsShared(apiKey)
+  return parseCurrentVilageFromItems(items)
 }
 
 /**
@@ -553,41 +585,14 @@ export async function fetchHwangGamWeather(apiKey) {
   }
 }
 
-/**
- * 24시간 예보 (단기예보 REH, SKY 기반 예상 점수)
- */
-export async function fetchForecast(apiKey) {
-  const { base_date, base_time } = getLatestBaseTime()
-
-  const params = new URLSearchParams({
-    serviceKey: apiKey,
-    pageNo: 1,
-    numOfRows: 500,
-    dataType: 'JSON',
-    base_date,
-    base_time,
-    nx: String(HWANGNYEONG_NX),
-    ny: String(HWANGNYEONG_NY),
-  })
-
-  const url = `${VILAGE_BASE}/getVilageFcst?${params}`
-  const data = await fetchDataGoKrJson(url)
-
-  const forecastResultCode = String(data.response?.header?.resultCode ?? '')
-  if (forecastResultCode !== '00' && forecastResultCode !== '0') {
-    throw new Error(data.response?.header?.resultMsg || '단기예보 API 오류')
-  }
-
-  const items = data.response?.body?.items?.item
+function buildForecastListFromItems(items) {
   if (!items || !items.length) return []
-
   const byTime = {}
   for (const it of items) {
     const key = `${it.fcstDate}-${it.fcstTime}`
     if (!byTime[key]) byTime[key] = {}
     byTime[key][it.category] = it.fcstValue
   }
-
   const now = nowKST()
   const sortedAll = Object.entries(byTime)
     .map(([key, vals]) => {
@@ -602,7 +607,6 @@ export async function fetchForecast(apiKey) {
 
   const futureIdx = sortedAll.findIndex((s) => s.slotDate > now)
   const currentIdx = futureIdx > 0 ? futureIdx - 1 : futureIdx === 0 ? 0 : sortedAll.length - 1
-  // Take 24 slots starting from "now" slot (wrap around).
   const reordered = [...sortedAll.slice(currentIdx), ...sortedAll.slice(0, currentIdx)].slice(0, 24)
 
   return reordered.map((entry, i) => {
@@ -619,6 +623,15 @@ export async function fetchForecast(apiKey) {
       label: i === 0 ? '지금' : '',
     }
   })
+}
+
+/**
+ * 24시간 예보 (단기예보 REH, SKY 기반 예상 점수)
+ * ※ getVilageFcstItemsShared 로 홈과 동일 단기예보 응답 재사용
+ */
+export async function fetchForecast(apiKey) {
+  const items = await getVilageFcstItemsShared(apiKey)
+  return buildForecastListFromItems(items)
 }
 
 function estimateScoreFromForecast(reh, sky) {

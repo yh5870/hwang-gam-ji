@@ -18,6 +18,16 @@ export default function Home() {
   const navigate = useNavigate()
   const { metrics, analysis, loading, error, updatedAt, refresh, sunsetHHMM } = useWeather()
 
+  const visBasis =
+    metrics?.visibility_source === 'observed'
+      ? '가시거리는 기상청 실측을 반영했습니다.'
+      : metrics?.visibility_source === 'estimated'
+        ? '가시거리는 실측 지연 시 추정값을 썼습니다.'
+        : ''
+  const scoreBasisText = metrics
+    ? `${visBasis ? `${visBasis} ` : ''}습도·미세먼지·하늘·일몰을 함께 반영한 종합 점수입니다.`
+    : ''
+
   const [state, setState] = useState('initial')
   const [displayScore, setDisplayScore] = useState(0)
   const [currentTime, setCurrentTime] = useState(formatTime())
@@ -122,7 +132,7 @@ export default function Home() {
                   className="refresh-btn"
                   onClick={refresh}
                   disabled={loading}
-                  title="새로고침"
+                  aria-label="데이터 새로고침"
                 >
                   ↻
                 </button>
@@ -150,13 +160,16 @@ export default function Home() {
               </div>
             </section>
 
-            <section className="description-box">
+            <section className="description-box" aria-label="점수 안내">
               {analysis?.isJackpot && (
                 <div className={`jackpot-badge ${isJackpot10k ? 'rainbow' : 'gold'}`}>
                   잭팟 발생
                 </div>
               )}
               <p className="main-message">{analysis?.message}</p>
+              {scoreBasisText && (
+                <p className="score-basis">{scoreBasisText}</p>
+              )}
               {sunsetHHMM && (
                 <p className="sunset-info">오늘 일몰 {sunsetHHMM}</p>
               )}

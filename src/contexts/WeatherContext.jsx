@@ -64,7 +64,7 @@ export function WeatherProvider({ children }) {
   useEffect(() => {
     if (!apiKey) return
     // KMA updates are hourly-ish; poll often enough to catch new data.
-    const interval = setInterval(load, 10 * 60 * 1000)
+    const interval = setInterval(load, 15 * 60 * 1000)
     return () => clearInterval(interval)
   }, [apiKey, load])
 

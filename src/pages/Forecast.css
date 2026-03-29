@@ -10,9 +10,35 @@
 }
 
 .forecast-note {
-  font-size: 0.85rem;
+  font-size: 0.95rem;
+  line-height: 1.55;
   color: var(--text-secondary);
+  margin-bottom: 16px;
+  max-width: 36rem;
+}
+
+.forecast-compare {
+  font-size: 0.95rem;
+  line-height: 1.55;
+  color: var(--text-primary);
   margin-bottom: 20px;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.forecast-compare-line {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.forecast-compare-hint {
+  display: block;
+  font-size: 0.92rem;
+  font-weight: 500;
+  color: var(--text-secondary);
 }
 
 .forecast-page .loading-text,
@@ -64,7 +90,7 @@
 }
 
 .forecast-time .badge {
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   color: var(--accent);
   font-weight: 600;
 }
@@ -87,7 +113,16 @@
 }
 
 .forecast-visibility {
-  font-size: 0.9rem;
+  font-size: 0.95rem;
   color: var(--text-secondary);
   text-align: right;
+}
+
+body[data-time-of-day="before_sunset"] .forecast-compare {
+  background: rgba(255, 255, 255, 0.72);
+  border-color: rgba(15, 23, 42, 0.12);
+}
+
+body[data-time-of-day="before_sunset"] .forecast-compare-hint {
+  color: #475569;
 }

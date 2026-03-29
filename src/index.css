@@ -9,7 +9,8 @@
   --glass-border: rgba(255, 255, 255, 0.1);
   --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.8);
   --text-primary: #f1f5f9;
-  --text-secondary: #94a3b8;
+  /* 본문·보조 텍스트: 다크 배경에서 대비 확보 (과도하게 흐리지 않게) */
+  --text-secondary: #c5d0de;
   --accent: #22d3ee;
   --accent-glow: rgba(34, 211, 238, 0.5);
   --jackpot-gold: #fbbf24;
@@ -93,6 +94,8 @@ body[data-time-of-day="before_sunset"] .tab-bar::before {
 
 body[data-time-of-day="before_sunset"] .tab-item.active {
   background: rgba(2, 132, 199, 0.2);
+  color: #0369a1;
+  text-shadow: none;
 }
 
 body[data-time-of-day="before_sunset"] .metric-card.primary {
@@ -195,4 +198,16 @@ body {
     0 0 28px rgba(34, 211, 238, 0.12),
     inset 0 1px 0 rgba(255, 255, 255, 0.12);
   border-color: rgba(34, 211, 238, 0.15);
+}
+
+/* 터치·키보드: 최소 영역은 컴포넌트에서 맞추고, 포커스만 공통 처리 */
+.tab-item:focus-visible,
+button:focus-visible,
+a.btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.tab-item:focus:not(:focus-visible) {
+  outline: none;
 }

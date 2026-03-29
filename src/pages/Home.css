@@ -97,12 +97,18 @@
 }
 
 .refresh-btn {
-  padding: 4px 8px;
-  font-size: 1rem;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: rgba(0, 0, 0, 0.3);
-  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 10px;
+  font-size: 1.1rem;
+  line-height: 1;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(0, 0, 0, 0.35);
+  color: var(--text-primary);
   cursor: pointer;
 }
 
@@ -111,7 +117,7 @@
 }
 
 .loading-text {
-  font-size: 0.9rem;
+  font-size: 0.95rem;
   color: var(--text-secondary);
 }
 
@@ -389,10 +395,22 @@
   color: var(--text-primary);
 }
 
-.description-box .sunset-info {
-  font-size: 0.9rem;
+.description-box .score-basis {
+  font-size: 0.95rem;
+  line-height: 1.55;
   color: var(--text-secondary);
-  margin-top: 10px;
+  margin-top: 14px;
+  font-weight: 500;
+  text-align: left;
+  max-width: 320px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.description-box .sunset-info {
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+  margin-top: 12px;
   font-weight: 500;
 }
 
