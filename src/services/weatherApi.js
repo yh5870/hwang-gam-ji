@@ -94,27 +94,40 @@ function getLatestBaseTime() {
  * getWthrDataList + dateCd=HR = 시간자료 (실시간 Hourly)
  * ※ 매 시 15~20분 경에 직전 정각 관측값 업데이트됨
  * ※ 시정(vs) 단위: 10m → km 변환: vs/100
- * ※ 1순위: 오늘 1~2시간 전 / 2순위: 오늘 전체 / 3순위: 어제 (새벽 폴백)
+ *
+ * [핵심 fix] endHh를 '23'(하루 종일 고정)이 아닌 "현재 시각 - 1시간"으로 동적 설정.
+ * - ASOS API는 미래 시간이 포함된 요청에 NODATA(코드 03)를 반환함.
+ * - endHh가 현재 시각 기준이면 URL이 매시간 바뀌어 프록시 캐시도 자동 갱신됨.
+ * - 어제~오늘 2일 범위를 단일 쿼리로 조회 → API 호출 절감 + 항상 최신값 확보.
  */
 export async function fetchAsosVisibility(apiKey) {
   const now = nowKST()
-  const today = {
-    y: now.getFullYear(),
-    m: String(now.getMonth() + 1).padStart(2, '0'),
-    d: String(now.getDate()).padStart(2, '0'),
-  }
-  const dateToday = `${today.y}${today.m}${today.d}`
 
-  // 1) Prefer today's data first.
-  // If KMA hasn't published today's HR data yet (common), this may return NODATA.
-  let result = await fetchAsosVisibilityRangeLatest(apiKey, dateToday, '00', dateToday, '23', 48)
-  if (result?.value != null) return result
+  const dateToday = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`
 
-  // 2) Fallback to yesterday (latest available observation).
   const yesterday = new Date(now)
   yesterday.setDate(yesterday.getDate() - 1)
   const dateYesterday = `${yesterday.getFullYear()}${String(yesterday.getMonth() + 1).padStart(2, '0')}${String(yesterday.getDate()).padStart(2, '0')}`
-  result = await fetchAsosVisibilityRangeLatest(apiKey, dateYesterday, '00', dateYesterday, '23', 48)
+
+  // ASOS는 약 1시간 지연 게시 → endHh = 현재 시각 - 1 (미래 시간 포함 시 NODATA 반환됨)
+  const currentHour = now.getHours()
+  let endDt, endHh
+  if (currentHour === 0) {
+    // 자정(0시)이면 어제 23시까지로 맞춤
+    endDt = dateYesterday
+    endHh = '23'
+  } else {
+    endDt = dateToday
+    endHh = String(currentHour - 1).padStart(2, '0')
+  }
+
+  // 어제 00시 ~ 오늘 (현재-1)시 범위를 단일 쿼리로 조회 → 최신 관측값 자동 확보
+  const result = await fetchAsosVisibilityRangeLatest(
+    apiKey,
+    dateYesterday, '00',
+    endDt, endHh,
+    48,
+  )
   if (result?.value != null) return result
 
   const lastError = result?.error
@@ -190,111 +203,6 @@ async function fetchAsosVisibilityRangeLatest(apiKey, startDt, startHh, endDt, e
   }
 }
 
-/** 단일 시각 조회 (폴백용) */
-async function fetchAsosVisibilitySingle(apiKey, date, hour) {
-  const params = new URLSearchParams({
-    serviceKey: apiKey,
-    pageNo: 1,
-    numOfRows: 1,
-    dataType: 'JSON',
-    dataCd: 'ASOS',
-    dateCd: 'HR',
-    startDt: date,
-    startHh: hour,
-    endDt: date,
-    endHh: hour,
-    stnIds: String(BUSAN_STN),
-  })
-  const url = `${ASOS_BASE}/getWthrDataList?${params}`
-  try {
-    const data = await fetchDataGoKrJson(url)
-    const header = data.response?.header
-    const resultCode = String(header?.resultCode ?? '')
-    if (resultCode !== '00' && resultCode !== '0') return { value: null, error: header?.resultMsg }
-    const items = data.response?.body?.items?.item
-    if (!items) return { value: null, error: '데이터 없음' }
-    const item = Array.isArray(items) ? items[0] : items
-    if (!item?.vs || item.vs === '') return { value: null, error: '시정 없음' }
-    const vs = Number(item.vs)
-    if (Number.isNaN(vs) || vs < 0) return { value: null, error: `잘못된 시정: ${item.vs}` }
-    return {
-      value: vs / 100,
-      temperature: item.ta != null && item.ta !== '' ? Number(item.ta) : null,
-      wind_speed: item.ws != null && item.ws !== '' ? Number(item.ws) : null,
-      observedAt: item.tm || null,
-      stationName: item.stnNm || '부산',
-      error: null,
-    }
-  } catch (e) {
-    return { value: null, error: e?.message || '네트워크 오류' }
-  }
-}
-
-/** D-1 하루치 조회 후 가장 최신(마지막) 관측값 반환 */
-async function fetchAsosVisibilityDayRange(apiKey, date) {
-  const params = new URLSearchParams({
-    serviceKey: apiKey,
-    pageNo: 1,
-    numOfRows: 24,
-    dataType: 'JSON',
-    dataCd: 'ASOS',
-    dateCd: 'HR',
-    startDt: date,
-    startHh: '00',
-    endDt: date,
-    endHh: '23',
-    stnIds: String(BUSAN_STN),
-  })
-
-  const url = `${ASOS_BASE}/getWthrDataList?${params}`
-  let data
-  try {
-    data = await fetchDataGoKrJson(url)
-  } catch (e) {
-    return { value: null, error: `네트워크 오류: ${e?.message || '연결 실패'}` }
-  }
-
-  const header = data.response?.header
-  const resultCode = String(header?.resultCode ?? '')
-  const resultMsg = header?.resultMsg || ''
-
-  if (resultCode !== '00' && resultCode !== '0') {
-    if (resultCode === '03') {
-      return { value: null, error: resultMsg || '해당 시간 데이터 없음 (NODATA_ERROR)' }
-    }
-    return { value: null, error: resultMsg || `API 오류 (코드: ${resultCode})` }
-  }
-
-  const items = data.response?.body?.items?.item
-  if (!items || (Array.isArray(items) && items.length === 0)) {
-    return { value: null, error: '응답에 데이터 없음' }
-  }
-
-  const list = Array.isArray(items) ? items : [items]
-  const withVs = list
-    .filter((it) => it != null && it.vs != null && it.vs !== '')
-    .sort((a, b) => (b.tm || '').localeCompare(a.tm || ''))
-
-  const item = withVs[0]
-  if (!item) return { value: null, error: '시정(vs) 값 없음' }
-
-  const vs = Number(item.vs)
-  if (Number.isNaN(vs) || vs < 0) {
-    return { value: null, error: `잘못된 시정 값: ${item.vs}` }
-  }
-
-  const ta = item.ta != null && item.ta !== '' ? Number(item.ta) : null
-  const ws = item.ws != null && item.ws !== '' ? Number(item.ws) : null
-
-  return {
-    value: vs / 100,
-    temperature: !Number.isNaN(ta) ? ta : null,
-    wind_speed: !Number.isNaN(ws) ? ws : null,
-    observedAt: item.tm || null,
-    stationName: item.stnNm || '부산',
-    error: null,
-  }
-}
 
 /** 동일 시각에 단기예보 HTTP를 1번만 쓰기 위한 in-flight 공유 (홈+예보 중복 제거) */
 let vilageItemsInflight = null

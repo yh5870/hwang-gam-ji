@@ -46,8 +46,9 @@ export default async function handler(req, res) {
 
     const contentType = upstream.headers.get('content-type') || 'application/octet-stream'
     res.setHeader('content-type', contentType)
-    // 동일 URL 반복 호출 시 엣지 캐시로 공공데이터포털 부담·일일 한도 절약
-    res.setHeader('cache-control', 's-maxage=900, stale-while-revalidate=1800')
+    // ASOS URL은 매시간 endHh가 바뀌어 자동 갱신됨.
+    // stale-while-revalidate를 짧게 유지해야 NODATA 캐시가 오래 서빙되지 않음.
+    res.setHeader('cache-control', 's-maxage=300, stale-while-revalidate=300')
 
     const body = await upstream.arrayBuffer()
     res.status(upstream.status).send(Buffer.from(body))
