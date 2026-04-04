@@ -331,12 +331,13 @@ function pm25ToDustLabel(pm25) {
  */
 export async function fetchAirQuality(apiKey) {
   const now = nowKST()
-  const yesterday = new Date(now)
-  yesterday.setDate(yesterday.getDate() - 1)
-  const yyyy = yesterday.getFullYear()
-  const mm = String(yesterday.getMonth() + 1).padStart(2, '0')
-  const dd = String(yesterday.getDate()).padStart(2, '0')
-  const controlnumber = `${yyyy}${mm}${dd}23`
+  // 공공데이터는 정각 후 약 15~20분 뒤 업데이트 → 현재 시각 -1시간이 가장 안전한 확정 데이터
+  const target = new Date(now.getTime() - 60 * 60 * 1000)
+  const yyyy = target.getFullYear()
+  const mm = String(target.getMonth() + 1).padStart(2, '0')
+  const dd = String(target.getDate()).padStart(2, '0')
+  const hh = String(target.getHours()).padStart(2, '0')
+  const controlnumber = `${yyyy}${mm}${dd}${hh}`
 
   const params = new URLSearchParams({
     serviceKey: apiKey,
