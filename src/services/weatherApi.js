@@ -95,36 +95,28 @@ function getLatestBaseTime() {
  * ※ 매 시 15~20분 경에 직전 정각 관측값 업데이트됨
  * ※ 시정(vs) 단위: 10m → km 변환: vs/100
  *
- * [핵심 fix] 2단계 폴백 방식:
- * 1) 오늘 00~(현재-1)시 쿼리 → ASOS API는 startDt=endDt 동일 날짜만 안정 지원.
- *    endHh를 '23' 고정 대신 "현재 시각 - 1시간"으로 동적 설정해 미래 시간 포함 방지.
- * 2) 오늘 데이터 NODATA면 어제 00~23시 쿼리로 폴백.
- * ※ startDt ≠ endDt 크로스데이 쿼리는 ASOS API가 NODATA를 반환하므로 사용하지 않음.
+ * [최종 전략] 어제 00시 ~ 오늘 현재 시각까지 24시간 범위를 단일 쿼리로 요청.
+ * - ASOS API는 크로스데이(startDt ≠ endDt) 쿼리를 지원함.
+ * - endHh를 현재 시각으로 설정하면 해당 시간 데이터가 아직 없어도 API가 에러 없이
+ *   그 이전 최신 데이터를 리스트에 담아 반환함. 정렬 로직이 자동으로 최신값을 선택.
+ * - "현재-1시간" 고정 방식은 오늘 데이터가 아직 없을 때 어제 23시로 영구 폴백되는 문제 있음.
  */
 export async function fetchAsosVisibility(apiKey) {
   const now = nowKST()
 
-  const dateToday = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`
+  const formatDt = (d) =>
+    `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`
 
-  const yesterday = new Date(now)
-  yesterday.setDate(yesterday.getDate() - 1)
-  const dateYesterday = `${yesterday.getFullYear()}${String(yesterday.getMonth() + 1).padStart(2, '0')}${String(yesterday.getDate()).padStart(2, '0')}`
+  const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+  const startDt = formatDt(yesterday)
+  const endDt = formatDt(now)
+  const endHh = String(now.getHours()).padStart(2, '0')
 
-  // ASOS는 약 1시간 지연 게시 → endHh = 현재 시각 - 1 (미래 시간 포함 시 NODATA 반환됨)
-  const currentHour = now.getHours()
+  // 어제 00시 ~ 오늘 현재 시각, 최대 48행 → 정렬 후 최신값 추출
+  const result = await fetchAsosVisibilityRangeLatest(apiKey, startDt, '00', endDt, endHh, 48)
+  if (result?.value != null) return result
 
-  // 1) 오늘 데이터 우선 조회 (자정 이전에 충분한 시간이 지난 경우)
-  if (currentHour >= 1) {
-    const endHh = String(currentHour - 1).padStart(2, '0')
-    const result = await fetchAsosVisibilityRangeLatest(apiKey, dateToday, '00', dateToday, endHh, 24)
-    if (result?.value != null) return result
-  }
-
-  // 2) 오늘 데이터 없으면 어제 전체 조회 (자정 직후 새벽 폴백)
-  const fallback = await fetchAsosVisibilityRangeLatest(apiKey, dateYesterday, '00', dateYesterday, '23', 24)
-  if (fallback?.value != null) return fallback
-
-  const lastError = fallback?.error
+  const lastError = result?.error
   throw new Error(
     lastError
       ? `가시거리 데이터를 불러올 수 없습니다. (${lastError})`
