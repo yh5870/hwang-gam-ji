@@ -489,8 +489,8 @@ export async function fetchHwangGamWeather(apiKey) {
     station,
     sky: vilage ? skyToText(vilage.sky) : '정보없음',
     pty: vilage?.pty ?? '0',
-    wind_speed: asosResult.wind_speed ?? windFromVilage ?? null,
-    temperature: asosResult.temperature ?? tempFromVilage ?? null,
+    wind_speed: asosResult?.wind_speed ?? windFromVilage ?? null,
+    temperature: asosResult?.temperature ?? tempFromVilage ?? null,
   }
 }
 
