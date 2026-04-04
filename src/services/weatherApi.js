@@ -95,10 +95,11 @@ function getLatestBaseTime() {
  * ※ 매 시 15~20분 경에 직전 정각 관측값 업데이트됨
  * ※ 시정(vs) 단위: 10m → km 변환: vs/100
  *
- * [핵심 fix] endHh를 '23'(하루 종일 고정)이 아닌 "현재 시각 - 1시간"으로 동적 설정.
- * - ASOS API는 미래 시간이 포함된 요청에 NODATA(코드 03)를 반환함.
- * - endHh가 현재 시각 기준이면 URL이 매시간 바뀌어 프록시 캐시도 자동 갱신됨.
- * - 어제~오늘 2일 범위를 단일 쿼리로 조회 → API 호출 절감 + 항상 최신값 확보.
+ * [핵심 fix] 2단계 폴백 방식:
+ * 1) 오늘 00~(현재-1)시 쿼리 → ASOS API는 startDt=endDt 동일 날짜만 안정 지원.
+ *    endHh를 '23' 고정 대신 "현재 시각 - 1시간"으로 동적 설정해 미래 시간 포함 방지.
+ * 2) 오늘 데이터 NODATA면 어제 00~23시 쿼리로 폴백.
+ * ※ startDt ≠ endDt 크로스데이 쿼리는 ASOS API가 NODATA를 반환하므로 사용하지 않음.
  */
 export async function fetchAsosVisibility(apiKey) {
   const now = nowKST()
@@ -111,26 +112,19 @@ export async function fetchAsosVisibility(apiKey) {
 
   // ASOS는 약 1시간 지연 게시 → endHh = 현재 시각 - 1 (미래 시간 포함 시 NODATA 반환됨)
   const currentHour = now.getHours()
-  let endDt, endHh
-  if (currentHour === 0) {
-    // 자정(0시)이면 어제 23시까지로 맞춤
-    endDt = dateYesterday
-    endHh = '23'
-  } else {
-    endDt = dateToday
-    endHh = String(currentHour - 1).padStart(2, '0')
+
+  // 1) 오늘 데이터 우선 조회 (자정 이전에 충분한 시간이 지난 경우)
+  if (currentHour >= 1) {
+    const endHh = String(currentHour - 1).padStart(2, '0')
+    const result = await fetchAsosVisibilityRangeLatest(apiKey, dateToday, '00', dateToday, endHh, 24)
+    if (result?.value != null) return result
   }
 
-  // 어제 00시 ~ 오늘 (현재-1)시 범위를 단일 쿼리로 조회 → 최신 관측값 자동 확보
-  const result = await fetchAsosVisibilityRangeLatest(
-    apiKey,
-    dateYesterday, '00',
-    endDt, endHh,
-    48,
-  )
-  if (result?.value != null) return result
+  // 2) 오늘 데이터 없으면 어제 전체 조회 (자정 직후 새벽 폴백)
+  const fallback = await fetchAsosVisibilityRangeLatest(apiKey, dateYesterday, '00', dateYesterday, '23', 24)
+  if (fallback?.value != null) return fallback
 
-  const lastError = result?.error
+  const lastError = fallback?.error
   throw new Error(
     lastError
       ? `가시거리 데이터를 불러올 수 없습니다. (${lastError})`
