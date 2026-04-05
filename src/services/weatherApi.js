@@ -90,25 +90,85 @@ function getLatestBaseTime() {
 }
 
 /**
- * ASOS 가시거리 조회 - 부산(159)
- * getWthrDataList(dateCd=HR): 전날까지의 확정 시간자료를 제공.
- * ※ 오늘 날짜 포함 시 resultCode 99 반환 → 어제 하루치(00~23시)만 조회.
- * ※ 시정(vs) 단위: 10m → km 변환: vs/100
+ * 가시거리 조회 - 1순위: 기상청 ASOS(어제 확정값), 2순위: Google Weather API(실시간)
+ * ASOS getWthrDataList(dateCd=HR)는 전날까지만 제공(오늘 포함 시 resultCode 99).
+ * ASOS 실패 시 Google Maps Platform Weather API로 황령산 좌표 기준 가시거리를 반환.
  */
 export async function fetchAsosVisibility(apiKey) {
   const now = nowKST()
   const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000)
   const dateYesterday = `${yesterday.getFullYear()}${String(yesterday.getMonth() + 1).padStart(2, '0')}${String(yesterday.getDate()).padStart(2, '0')}`
 
-  const result = await fetchAsosVisibilityYesterday(apiKey, dateYesterday)
-  if (result?.value != null) return result
+  // 1순위: ASOS 어제 데이터
+  const asosResult = await fetchAsosVisibilityYesterday(apiKey, dateYesterday)
+  if (asosResult?.value != null) return asosResult
 
-  const lastError = result?.error
+  console.warn('[ASOS] 데이터 없음, Google Weather API로 폴백:', asosResult?.error)
+
+  // 2순위: Google Weather API (실시간, 황령산 좌표 기준)
+  const googleResult = await fetchGoogleWeatherVisibility()
+  if (googleResult?.value != null) return googleResult
+
   throw new Error(
-    lastError
-      ? `가시거리 데이터를 불러올 수 없습니다. (${lastError})`
-      : '가시거리 데이터를 불러올 수 없습니다. 기상청 ASOS API에서 응답이 없습니다.',
+    asosResult?.error
+      ? `가시거리 데이터를 불러올 수 없습니다. (${asosResult.error})`
+      : '가시거리 데이터를 불러올 수 없습니다.',
   )
+}
+
+/**
+ * Google Maps Platform Weather API - 현재 가시거리 조회
+ * 황령산 봉수대 좌표(35.15723, 129.08191) 기준 실시간 데이터.
+ * API 키는 프록시 서버(GOOGLE_WEATHER_KEY 환경변수)에서 주입됨.
+ */
+async function fetchGoogleWeatherVisibility() {
+  // 황령산 봉수대 좌표
+  const lat = 35.15723
+  const lng = 129.08191
+
+  const params = new URLSearchParams({
+    'location.latitude': String(lat),
+    'location.longitude': String(lng),
+  })
+  const targetUrl = `https://weather.googleapis.com/v1/currentConditions:lookup?${params}`
+
+  let data
+  try {
+    const proxyUrl = import.meta.env.PROD
+      ? `/api/proxy?url=${encodeURIComponent(targetUrl)}`
+      : targetUrl
+    const res = await fetch(proxyUrl)
+    if (!res.ok) {
+      console.warn('[Google Weather] HTTP 오류:', res.status)
+      return { value: null, error: `Google Weather HTTP ${res.status}` }
+    }
+    data = await res.json()
+  } catch (e) {
+    console.warn('[Google Weather] 네트워크 오류:', e?.message)
+    return { value: null, error: `Google Weather 연결 실패: ${e?.message}` }
+  }
+
+  const distKm = data?.visibility?.distance
+  if (distKm == null || Number.isNaN(Number(distKm))) {
+    console.warn('[Google Weather] visibility 필드 없음:', JSON.stringify(data).slice(0, 200))
+    return { value: null, error: 'Google Weather visibility 없음' }
+  }
+
+  const tempC = data?.temperature?.degrees ?? null
+  const windKph = data?.wind?.speed?.value ?? null
+  const windMs = windKph != null ? Math.round((windKph / 3.6) * 10) / 10 : null
+
+  console.info('[Google Weather] 가시거리:', distKm, 'km | 기온:', tempC, '°C')
+
+  return {
+    value: Number(distKm),
+    temperature: tempC != null ? Number(tempC) : null,
+    wind_speed: windMs,
+    observedAt: data?.currentTime ? data.currentTime.slice(0, 13).replace('T', ' ') : null,
+    stationName: '황령산 (Google Weather)',
+    source: 'google',
+    error: null,
+  }
 }
 
 /** 어제 하루치(00~23시) 조회 후 vs가 있는 가장 최신 관측값 반환 */

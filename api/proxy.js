@@ -1,7 +1,11 @@
-function isAllowedDataGoKrUrl(u) {
+function isAllowedUrl(u) {
   try {
     const parsed = new URL(u)
-    return parsed.protocol === 'https:' && parsed.hostname === 'apis.data.go.kr'
+    if (parsed.protocol !== 'https:') return false
+    return (
+      parsed.hostname === 'apis.data.go.kr' ||
+      parsed.hostname === 'weather.googleapis.com'
+    )
   } catch {
     return false
   }
@@ -26,17 +30,30 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'invalid_url' })
     }
 
-    if (!isAllowedDataGoKrUrl(target.toString())) {
+    if (!isAllowedUrl(target.toString())) {
       return res.status(400).json({ error: 'url_not_allowed' })
     }
 
-    const kmaKey = String(process.env.KMA_API_KEY || '')
-      .trim()
-      .replace(/\r/g, '')
-      .replace(/\n/g, '')
+    // apis.data.go.kr → KMA 서비스키 주입
+    if (target.hostname === 'apis.data.go.kr') {
+      const kmaKey = String(process.env.KMA_API_KEY || '')
+        .trim()
+        .replace(/\r/g, '')
+        .replace(/\n/g, '')
+      if (!target.searchParams.get('serviceKey') && kmaKey) {
+        target.searchParams.set('serviceKey', kmaKey)
+      }
+    }
 
-    if (!target.searchParams.get('serviceKey') && kmaKey) {
-      target.searchParams.set('serviceKey', kmaKey)
+    // weather.googleapis.com → Google Weather API 키 주입
+    if (target.hostname === 'weather.googleapis.com') {
+      const googleKey = String(process.env.GOOGLE_WEATHER_KEY || '')
+        .trim()
+        .replace(/\r/g, '')
+        .replace(/\n/g, '')
+      if (!target.searchParams.get('key') && googleKey) {
+        target.searchParams.set('key', googleKey)
+      }
     }
 
     const upstream = await fetch(target.toString(), {
@@ -46,8 +63,6 @@ export default async function handler(req, res) {
 
     const contentType = upstream.headers.get('content-type') || 'application/octet-stream'
     res.setHeader('content-type', contentType)
-    // ASOS URL은 매시간 endHh가 바뀌어 자동 갱신됨.
-    // stale-while-revalidate를 짧게 유지해야 NODATA 캐시가 오래 서빙되지 않음.
     res.setHeader('cache-control', 's-maxage=300, stale-while-revalidate=300')
 
     const body = await upstream.arrayBuffer()
