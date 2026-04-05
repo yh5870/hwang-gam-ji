@@ -409,6 +409,8 @@ export async function fetchHwangGamWeather(apiKey) {
   const visibilityKm = useEstimated ? estimatedVis : observedVisibilityKm
   const visibilitySource = useEstimated ? 'estimated' : 'observed'
   const visibilityAsosValue = observedVisibilityKm
+  // Open-Meteo 상한(24.14km) 도달 시 실제로는 그 이상일 수 있음을 표시
+  const visibilityAtCap = !useEstimated && observedVisibilityKm != null && observedVisibilityKm >= 24.0
 
   const fcstDate = vilage.fcstDate || null
   const fcstTime = vilage.fcstTime || null
@@ -419,7 +421,7 @@ export async function fetchHwangGamWeather(apiKey) {
   return {
     visibility_km: visibilityKm,
     visibility_source: visibilitySource,
-    // New: expose both observed & estimated explicitly (UI can show both).
+    visibility_at_cap: visibilityAtCap,
     visibility_observed_km: observedVisibilityKm,
     visibility_estimated_km: estimatedVis,
     visibility_asos_km: visibilityAsosValue,

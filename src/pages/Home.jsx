@@ -20,9 +20,11 @@ export default function Home() {
 
   const visBasis =
     metrics?.visibility_source === 'observed'
-      ? '가시거리는 기상청 실측을 반영했습니다.'
+      ? metrics?.visibility_at_cap
+        ? '가시거리는 24km 이상(맑음)으로 확인됐습니다.'
+        : `가시거리 ${metrics.visibility_observed_km}km 실측을 반영했습니다.`
       : metrics?.visibility_source === 'estimated'
-        ? '가시거리는 실측 지연 시 추정값을 썼습니다.'
+        ? '가시거리는 실측 부재 시 예보 기반 추정값을 썼습니다.'
         : ''
   const scoreBasisText = metrics
     ? `${visBasis ? `${visBasis} ` : ''}습도·미세먼지·하늘·일몰을 함께 반영한 종합 점수입니다.`

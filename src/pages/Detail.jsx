@@ -81,17 +81,23 @@ export default function Detail() {
       <div className="metrics-grid">
         <div className="metric-card glass primary">
           <span className="metric-label">가시거리</span>
-          <span className="metric-value main">{m.visibility_km}</span>
+          <span className="metric-value main">
+            {m.visibility_at_cap ? '24+' : m.visibility_km}
+          </span>
           <span className="metric-unit">km</span>
           <span className="metric-sub metric-source">
             <>
               {m.visibility_observed_km != null ? (
                 <>
-                  실측 {m.visibility_observed_km}km · {m.visibility_station || '부산 기상관측소'}
-                  {m.visibility_observed_at ? ` · ${formatObservedAt(m.visibility_observed_at)}` : ''}
+                  {m.visibility_at_cap
+                    ? `24km 이상 (맑음) · ${m.visibility_station || 'Open-Meteo'}`
+                    : `실측 ${m.visibility_observed_km}km · ${m.visibility_station || 'Open-Meteo'}`}
+                  {m.visibility_observed_at && !m.visibility_at_cap
+                    ? ` · ${formatObservedAt(m.visibility_observed_at)}`
+                    : ''}
                 </>
               ) : (
-                <>실측값 없음 (기상청 제공 지연 가능)</>
+                <>실측값 없음</>
               )}
               {m.visibility_estimated_km != null && (
                 <>
