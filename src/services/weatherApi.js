@@ -89,65 +89,60 @@ function getLatestBaseTime() {
 }
 
 /**
- * 가시거리 조회 - Google Maps Platform Weather API (실시간, 황령산 좌표 기준)
- * API 키는 프록시 서버(GOOGLE_WEATHER_KEY 환경변수)에서 주입됨.
+ * 가시거리 조회 - Open-Meteo (무료·키 불필요·한국 지원·1시간 단위 실시간)
+ * Google Weather API는 현재 미국만 지원하여 사용 불가.
  * 실패 시 null 반환 → fetchHwangGamWeather에서 예보 기반 추정으로 자동 전환.
- * ※ 기상청 ASOS는 전날 확정값만 제공하여 부정확 → 완전 제거.
  */
 export async function fetchAsosVisibility() {
-  return fetchGoogleWeatherVisibility()
+  return fetchOpenMeteoVisibility()
 }
 
-/** Google Weather API: 황령산 봉수대(35.15723, 129.08191) 기준 현재 가시거리 */
-async function fetchGoogleWeatherVisibility() {
-  const params = new URLSearchParams({
-    'location.latitude': '35.15723',
-    'location.longitude': '129.08191',
-  })
-  const targetUrl = `https://weather.googleapis.com/v1/currentConditions:lookup?${params}`
+/**
+ * Open-Meteo 현재 날씨 API - 부산(황령산 인근) 가시거리 조회
+ * https://api.open-meteo.com — 무료, API 키 불필요, CORS 허용
+ * visibility 단위: m → km 변환
+ */
+async function fetchOpenMeteoVisibility() {
+  const lat = 35.158
+  const lng = 129.064
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=visibility,temperature_2m,wind_speed_10m&timezone=Asia%2FSeoul`
 
   let data
   try {
-    const proxyUrl = import.meta.env.PROD
-      ? `/api/proxy?url=${encodeURIComponent(targetUrl)}`
-      : targetUrl
-    const res = await fetch(proxyUrl)
+    const res = await fetch(url)
     if (!res.ok) {
-      console.warn('[Google Weather] HTTP 오류:', res.status)
-      return { value: null, error: `Google Weather HTTP ${res.status}` }
+      console.warn('[Open-Meteo] HTTP 오류:', res.status)
+      return { value: null, error: `Open-Meteo HTTP ${res.status}` }
     }
     data = await res.json()
   } catch (e) {
-    console.warn('[Google Weather] 네트워크 오류:', e?.message)
-    return { value: null, error: `Google Weather 연결 실패: ${e?.message}` }
+    console.warn('[Open-Meteo] 네트워크 오류:', e?.message)
+    return { value: null, error: `Open-Meteo 연결 실패: ${e?.message}` }
   }
 
-  const distKm = data?.visibility?.distance
-  if (distKm == null || Number.isNaN(Number(distKm))) {
-    console.warn('[Google Weather] visibility 필드 없음:', JSON.stringify(data).slice(0, 200))
-    return { value: null, error: 'Google Weather visibility 없음' }
+  const visM = data?.current?.visibility
+  if (visM == null || Number.isNaN(Number(visM))) {
+    console.warn('[Open-Meteo] visibility 필드 없음')
+    return { value: null, error: 'Open-Meteo visibility 없음' }
   }
 
-  const tempC = data?.temperature?.degrees ?? null
-  const windKph = data?.wind?.speed?.value ?? null
+  const visKm = Math.round(Number(visM) / 100) / 10  // m → km (소수점 1자리)
+  const tempC = data?.current?.temperature_2m ?? null
+  // Open-Meteo wind_speed_10m 단위: km/h → m/s 변환
+  const windKph = data?.current?.wind_speed_10m ?? null
   const windMs = windKph != null ? Math.round((windKph / 3.6) * 10) / 10 : null
+  // Open-Meteo time은 이미 KST (timezone=Asia/Seoul 지정)
+  const observedAt = data?.current?.time ? data.current.time.replace('T', ' ') : null
 
-  // UTC → KST 변환 (getHoursSinceObservation이 KST 기준으로 경과시간을 계산하므로)
-  let observedAt = null
-  if (data?.currentTime) {
-    const kst = new Date(new Date(data.currentTime).getTime() + 9 * 60 * 60 * 1000)
-    observedAt = `${kst.getFullYear()}-${String(kst.getMonth() + 1).padStart(2, '0')}-${String(kst.getDate()).padStart(2, '0')} ${String(kst.getHours()).padStart(2, '0')}:${String(kst.getMinutes()).padStart(2, '0')}`
-  }
-
-  console.info('[Google Weather] 가시거리:', distKm, 'km | 기온:', tempC, '°C | 관측(KST):', observedAt)
+  console.info('[Open-Meteo] 가시거리:', visKm, 'km | 기온:', tempC, '°C | 관측(KST):', observedAt)
 
   return {
-    value: Number(distKm),
+    value: visKm,
     temperature: tempC != null ? Number(tempC) : null,
     wind_speed: windMs,
     observedAt,
-    stationName: '황령산 (Google Weather)',
-    source: 'google',
+    stationName: '부산 (Open-Meteo)',
+    source: 'openmeteo',
     error: null,
   }
 }
