@@ -406,11 +406,18 @@ export async function fetchHwangGamWeather(apiKey) {
   const hasObserved = observedVisibilityKm != null
   const useEstimated = !hasObserved || (asosStale && vilage.reh != null)
 
-  const visibilityKm = useEstimated ? estimatedVis : observedVisibilityKm
-  const visibilitySource = useEstimated ? 'estimated' : 'observed'
-  const visibilityAsosValue = observedVisibilityKm
-  // Open-Meteo 상한(24.14km) 도달 시 실제로는 그 이상일 수 있음을 표시
+  // Open-Meteo 상한(24.14km) 도달 시 예보 데이터로 25~50km 범위 세분화
+  // 근거: Open-Meteo가 24km 이상임을 확인 → 최솟값 24km 보장 + 예보로 상향 보정
   const visibilityAtCap = !useEstimated && observedVisibilityKm != null && observedVisibilityKm >= 24.0
+  const refinedCapVis = visibilityAtCap ? Math.max(24.0, estimatedVis) : null
+
+  const visibilityKm = useEstimated
+    ? estimatedVis
+    : visibilityAtCap
+      ? refinedCapVis        // 24km+ 확인 + 예보 보정 (최솟값 24km 보장)
+      : observedVisibilityKm
+  const visibilitySource = useEstimated ? 'estimated' : visibilityAtCap ? 'observed_refined' : 'observed'
+  const visibilityAsosValue = observedVisibilityKm
 
   const fcstDate = vilage.fcstDate || null
   const fcstTime = vilage.fcstTime || null

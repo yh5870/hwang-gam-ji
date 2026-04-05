@@ -90,7 +90,7 @@ export default function Detail() {
               {m.visibility_observed_km != null ? (
                 <>
                   {m.visibility_at_cap
-                    ? `24km 이상 (맑음) · ${m.visibility_station || 'Open-Meteo'}`
+                    ? `Open-Meteo 24km+ 확인 · 예보 보정값`
                     : `실측 ${m.visibility_observed_km}km · ${m.visibility_station || 'Open-Meteo'}`}
                   {m.visibility_observed_at && !m.visibility_at_cap
                     ? ` · ${formatObservedAt(m.visibility_observed_at)}`
