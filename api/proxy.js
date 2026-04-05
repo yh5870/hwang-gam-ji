@@ -1,11 +1,7 @@
 function isAllowedUrl(u) {
   try {
     const parsed = new URL(u)
-    if (parsed.protocol !== 'https:') return false
-    return (
-      parsed.hostname === 'apis.data.go.kr' ||
-      parsed.hostname === 'weather.googleapis.com'
-    )
+    return parsed.protocol === 'https:' && parsed.hostname === 'apis.data.go.kr'
   } catch {
     return false
   }
@@ -42,17 +38,6 @@ export default async function handler(req, res) {
         .replace(/\n/g, '')
       if (!target.searchParams.get('serviceKey') && kmaKey) {
         target.searchParams.set('serviceKey', kmaKey)
-      }
-    }
-
-    // weather.googleapis.com → Google Weather API 키 주입
-    if (target.hostname === 'weather.googleapis.com') {
-      const googleKey = String(process.env.GOOGLE_WEATHER_KEY || '')
-        .trim()
-        .replace(/\r/g, '')
-        .replace(/\n/g, '')
-      if (!target.searchParams.get('key') && googleKey) {
-        target.searchParams.set('key', googleKey)
       }
     }
 
