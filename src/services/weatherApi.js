@@ -90,27 +90,14 @@ function getLatestBaseTime() {
 }
 
 /**
- * ASOS 시간자료(Hourly) - 부산(159) 시정(가시거리) 조회
- * getWthrDataList + dateCd=HR = 시간자료 (실시간 Hourly)
- * ※ 매 시 15~20분 경에 직전 정각 관측값 업데이트됨
+ * ASOS 실시간 가시거리 조회 - 부산(159)
+ * getRecentWthrDataList: 날짜 파라미터 없이 최신 N개 관측값을 바로 반환.
+ * ※ getWthrDataList(dateCd=HR)는 전날까지만 제공(resultCode 99) → 사용 불가.
  * ※ 시정(vs) 단위: 10m → km 변환: vs/100
- *
- * [확정 전략] ASOS getWthrDataList(dateCd=HR)는 전날까지만 자료를 제공함.
- * - endDt=오늘로 요청하면 resultCode 99 ("전날 자료까지 제공됩니다") 에러 반환.
- * - 따라서 어제 날짜(00~23시) 하루치만 조회하고, 그 중 vs 값이 있는 최신 관측값을 사용.
- * - 어제 데이터이므로 asosStale 기준을 36h로 넓혀 하루 종일 실측값으로 표시.
+ * ※ 매 시 15~20분 경에 직전 정각 관측값 업데이트됨.
  */
 export async function fetchAsosVisibility(apiKey) {
-  const now = nowKST()
-
-  const formatDt = (d) =>
-    `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`
-
-  const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000)
-  const dateYesterday = formatDt(yesterday)
-
-  // 어제 00~23시 하루치 조회 (오늘 날짜 포함 시 resultCode 99 반환됨)
-  const result = await fetchAsosVisibilityRangeLatest(apiKey, dateYesterday, '00', dateYesterday, '23', 24)
+  const result = await fetchAsosVisibilityRealtime(apiKey)
   if (result?.value != null) return result
 
   const lastError = result?.error
@@ -121,23 +108,20 @@ export async function fetchAsosVisibility(apiKey) {
   )
 }
 
-/** 2일 범위 조회 후 가장 최신(마지막) 관측값 반환 */
-async function fetchAsosVisibilityRangeLatest(apiKey, startDt, startHh, endDt, endHh, numRows) {
+/**
+ * getRecentWthrDataList: 날짜 범위 없이 최신 관측값 N개를 반환하는 실시간 오퍼레이션.
+ * 첫 번째 item이 가장 최신 데이터이므로 정렬 불필요.
+ */
+async function fetchAsosVisibilityRealtime(apiKey, numRows = 10) {
   const params = new URLSearchParams({
     serviceKey: apiKey,
     pageNo: 1,
-    numOfRows: String(numRows ?? 72),
+    numOfRows: String(numRows),
     dataType: 'JSON',
-    dataCd: 'ASOS',
-    dateCd: 'HR',
-    startDt,
-    startHh,
-    endDt,
-    endHh,
     stnIds: String(BUSAN_STN),
   })
 
-  const url = `${ASOS_BASE}/getWthrDataList?${params}`
+  const url = `${ASOS_BASE}/getRecentWthrDataList?${params}`
   let data
   try {
     data = await fetchDataGoKrJson(url)
@@ -149,31 +133,23 @@ async function fetchAsosVisibilityRangeLatest(apiKey, startDt, startHh, endDt, e
   const header = data.response?.header
   const resultCode = String(header?.resultCode ?? '')
   const resultMsg = header?.resultMsg || ''
-  console.info('[ASOS] resultCode:', resultCode, '| resultMsg:', resultMsg, '| 쿼리:', { startDt, startHh, endDt, endHh })
+  console.info('[ASOS-recent] resultCode:', resultCode, '| resultMsg:', resultMsg)
 
   if (resultCode !== '00' && resultCode !== '0') {
-    if (resultCode === '03') {
-      return { value: null, error: resultMsg || '해당 시간 데이터 없음 (NODATA_ERROR)' }
-    }
     return { value: null, error: resultMsg || `API 오류 (코드: ${resultCode})` }
   }
 
   const items = data.response?.body?.items?.item
   if (!items || (Array.isArray(items) && items.length === 0)) {
-    console.warn('[ASOS] 응답에 item 없음. body:', JSON.stringify(data.response?.body).slice(0, 300))
+    console.warn('[ASOS-recent] 응답에 item 없음')
     return { value: null, error: '응답에 데이터 없음' }
   }
 
   const list = Array.isArray(items) ? items : [items]
-  console.info('[ASOS] 수신 item 수:', list.length, '| vs 샘플:', list.slice(0, 3).map(i => ({ tm: i.tm, vs: i.vs })))
+  console.info('[ASOS-recent] 수신 item 수:', list.length, '| vs 샘플:', list.slice(0, 3).map(i => ({ tm: i.tm, vs: i.vs })))
 
-  const withVs = list
-    .filter((it) => it != null && it.vs != null && it.vs !== '' && String(it.vs).trim() !== '')
-    .sort((a, b) => (b.tm || '').localeCompare(a.tm || ''))
-
-  console.info('[ASOS] vs 필터 후 count:', withVs.length, '| 최신:', withVs[0] ? { tm: withVs[0].tm, vs: withVs[0].vs } : null)
-
-  const item = withVs[0]
+  // getRecentWthrDataList는 최신순으로 반환 → vs가 있는 첫 번째 항목 사용
+  const item = list.find((it) => it != null && it.vs != null && it.vs !== '' && String(it.vs).trim() !== '')
   if (!item) return { value: null, error: '시정(vs) 값 없음' }
 
   const vs = Number(item.vs)
@@ -446,8 +422,8 @@ export async function fetchHwangGamWeather(apiKey) {
   const visibilityStation = asosResult?.stationName || '부산 기상관측소'
   const observedVisibilityKm = asosResult?.value ?? null
   const hoursSinceObs = getHoursSinceObservation(visibilityObservedAt)
-  // ASOS는 전날까지만 자료를 제공하므로 최대 ~36시간 전 데이터까지 실측값으로 인정.
-  const asosStale = hoursSinceObs != null && hoursSinceObs > 36
+  // getRecentWthrDataList는 실시간 데이터이므로 2시간 이상 오래된 경우만 stale 처리.
+  const asosStale = hoursSinceObs != null && hoursSinceObs > 2
 
   const estimatedVis = estimateVisibilityFromForecast(vilage.sky, vilage.reh, dustLevel === 'Bad')
   const hasObserved = observedVisibilityKm != null
