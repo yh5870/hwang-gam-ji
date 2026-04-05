@@ -476,3 +476,54 @@
 .quick-nav .btn:active {
   transform: translateY(0);
 }
+
+/* ══════════════════════════════
+   낮 시간대 (home.day) 전용 오버라이드
+   ══════════════════════════════ */
+
+/* 낮 orbs: 하늘색 + 황금빛 */
+.home.day::before {
+  background: #38bdf8;
+  opacity: 0.32;
+}
+
+.home.day::after {
+  background: radial-gradient(circle, #fde68a 0%, #fbbf24 60%);
+  width: 280px;
+  height: 280px;
+  bottom: 15%;
+  left: -60px;
+  opacity: 0.2;
+}
+
+/* 낮 score-label 색상 */
+.home.day .score-label {
+  color: #334155;
+}
+
+/* 낮 main-message */
+.home.day .description-box .main-message {
+  color: #0f172a;
+}
+
+/* 낮 score-basis */
+.home.day .description-box .score-basis {
+  color: #334155;
+}
+
+/* 낮 sunset-info */
+.home.day .description-box .sunset-info {
+  color: #475569;
+}
+
+/* 낮 Quick Nav 버튼 */
+.home.day .quick-nav .btn:hover {
+  box-shadow: 0 8px 24px rgba(2, 132, 199, 0.22);
+}
+
+/* 낮 skeleton */
+.home.day .skeleton-countdown,
+.home.day .skeleton-gauge,
+.home.day .skeleton-message {
+  background: rgba(255, 255, 255, 0.45);
+}

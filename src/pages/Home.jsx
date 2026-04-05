@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useWeather } from '../contexts/WeatherContext'
 import Particles from '../components/Particles'
 import Glitter from '../components/Glitter'
+import DaySky from '../components/DaySky'
 import './Home.css'
 
 function formatTime() {
@@ -16,7 +17,7 @@ function formatTime() {
 
 export default function Home() {
   const navigate = useNavigate()
-  const { metrics, analysis, loading, error, updatedAt, refresh, sunsetHHMM } = useWeather()
+  const { metrics, analysis, loading, error, updatedAt, refresh, sunsetHHMM, timeOfDay } = useWeather()
 
   const visBasis =
     metrics?.visibility_source === 'observed_refined'
@@ -112,10 +113,13 @@ export default function Home() {
 
   if (!analysis) return null
 
+  const isBright = timeOfDay === 'before_sunset'
+
   return (
-    <div className={`home ${state === 'jackpot' ? 'jackpot' : isJackpot1k ? 'jackpot-1k' : ''} ${enhancedGlitterLevel >= 1 ? 'glitter-active' : ''}`}>
+    <div className={`home ${state === 'jackpot' ? 'jackpot' : isJackpot1k ? 'jackpot-1k' : ''} ${enhancedGlitterLevel >= 1 ? 'glitter-active' : ''} ${isBright ? 'day' : ''}`}>
+      <DaySky />
       <Particles active={state === 'jackpot'} />
-      <Glitter active={showGlitter} enhancedLevel={enhancedGlitterLevel} />
+      <Glitter active={showGlitter && !isBright} enhancedLevel={enhancedGlitterLevel} />
 
       <div className="home-content">
         {state === 'initial' ? (

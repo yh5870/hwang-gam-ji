@@ -50,42 +50,176 @@ body {
   transition: background 1.2s ease;
 }
 
-/* 일몰 전: 낮 느낌, 밝고 부드러운 배경 */
+/* ════════════════════════════════════════════
+   낮 시간대 (before_sunset) 테마 — 밝고 생동감 있는 하늘 느낌
+   ════════════════════════════════════════════ */
 body[data-time-of-day="before_sunset"] {
-  background: 
-    linear-gradient(180deg, #e0f2fe 0%, #bae6fd 25%, #7dd3fc 50%, #38bdf8 75%, #0ea5e9 100%),
-    linear-gradient(rgba(255,255,255,0.15) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,0.15) 1px, transparent 1px);
-  background-size: 100% 100%, 24px 24px, 24px 24px;
+  background:
+    linear-gradient(180deg,
+      #e0f7ff 0%,
+      #bae6fd 20%,
+      #7dd3fc 45%,
+      #38bdf8 70%,
+      #0ea5e9 88%,
+      #0284c7 100%
+    ),
+    linear-gradient(rgba(255,255,255,0.18) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.18) 1px, transparent 1px);
+  background-size: 100% 100%, 28px 28px, 28px 28px;
   background-attachment: fixed;
 }
 
 body[data-time-of-day="before_sunset"] {
   color: #0f172a;
   --text-primary: #0f172a;
-  --text-secondary: #475569;
-  --bg-card-solid: rgba(255, 255, 255, 0.75);
-  --glass: rgba(255, 255, 255, 0.5);
+  --text-secondary: #334155;
+  --text-muted: #64748b;
+  --bg-card-solid: rgba(255, 255, 255, 0.78);
+  --glass: rgba(255, 255, 255, 0.62);
+  --glass-border: rgba(15, 23, 42, 0.1);
+  --glass-shadow: 0 4px 24px rgba(2, 132, 199, 0.12);
   --accent: #0284c7;
-  --accent-glow: rgba(2, 132, 199, 0.4);
+  --accent-glow: rgba(2, 132, 199, 0.35);
 }
 
+/* 별 효과 숨김 */
 body[data-time-of-day="before_sunset"]::after {
-  opacity: 0.15;
+  opacity: 0;
 }
 
+/* 파이어플라이 숨김 */
 body[data-time-of-day="before_sunset"] .fireflies-canvas {
   opacity: 0;
 }
 
-body[data-time-of-day="before_sunset"] .description-box {
-  background: rgba(255, 255, 255, 0.6);
-  border-color: rgba(15, 23, 42, 0.12);
+/* ── home 오브: 보라색→하늘, 청록→황금 ── */
+body[data-time-of-day="before_sunset"] .home::before {
+  background: #38bdf8;
+  opacity: 0.35;
+  animation: day-orb-sky 5s ease-in-out infinite alternate;
 }
 
+body[data-time-of-day="before_sunset"] .home::after {
+  background: radial-gradient(circle, #fde68a 0%, #fbbf24 60%);
+  opacity: 0.22;
+  animation: day-orb-sun 6s ease-in-out infinite alternate;
+}
+
+@keyframes day-orb-sky {
+  from { transform: translate(0, 0) scale(1); }
+  to   { transform: translate(12px, 18px) scale(1.08); }
+}
+
+@keyframes day-orb-sun {
+  from { transform: translate(0, 0) scale(1); }
+  to   { transform: translate(-10px, -14px) scale(1.1); }
+}
+
+/* ── 게이지 후광 ── */
+body[data-time-of-day="before_sunset"] .gauge-section::before {
+  background: radial-gradient(
+    ellipse at center,
+    rgba(2, 132, 199, 0.22) 0%,
+    rgba(14, 165, 233, 0.08) 40%,
+    transparent 70%
+  );
+}
+
+/* ── 점수 링 ── */
+body[data-time-of-day="before_sunset"] .score-glow {
+  background: conic-gradient(
+    var(--accent) calc(var(--progress, 0) * 360deg),
+    rgba(15, 23, 42, 0.12) 0
+  ) !important;
+  box-shadow:
+    0 0 28px rgba(2, 132, 199, 0.38),
+    0 0 56px rgba(14, 165, 233, 0.18),
+    inset 0 0 16px rgba(2, 132, 199, 0.1);
+}
+
+/* ── 점수 내부 원: 흰색→하늘 그라디언트 ── */
+body[data-time-of-day="before_sunset"] .score-inner {
+  background: linear-gradient(
+    175deg,
+    rgba(255,255,255,0.97) 0%,
+    rgba(224,242,254,0.93) 45%,
+    rgba(125,211,252,0.88) 100%
+  );
+  box-shadow: inset 0 0 30px rgba(255,255,255,0.6), inset 0 -4px 16px rgba(2,132,199,0.15);
+}
+
+/* ── 점수 숫자 ── */
+body[data-time-of-day="before_sunset"]
+  .score-wrapper:not(.jackpot):not(.jackpot-1k)
+  .score-value {
+  color: #0369a1;
+  text-shadow:
+    0 0 16px rgba(2, 132, 199, 0.4),
+    0 2px 4px rgba(2, 132, 199, 0.15);
+}
+
+/* ── 로고 ── */
+body[data-time-of-day="before_sunset"] .logo {
+  color: #0369a1;
+  text-shadow:
+    0 2px 12px rgba(2, 132, 199, 0.28),
+    0 0 32px rgba(14, 165, 233, 0.15);
+}
+
+/* ── 새로고침 버튼 ── */
+body[data-time-of-day="before_sunset"] .refresh-btn {
+  background: rgba(255, 255, 255, 0.6);
+  border-color: rgba(15, 23, 42, 0.14);
+  color: #0f172a;
+  box-shadow: 0 2px 8px rgba(2,132,199,0.1);
+}
+
+body[data-time-of-day="before_sunset"] .refresh-btn:hover {
+  background: rgba(255,255,255,0.8);
+}
+
+/* ── 현재 시간 텍스트 ── */
+body[data-time-of-day="before_sunset"] .current-time {
+  color: #0369a1;
+}
+
+/* ── 설명 카드 ── */
+body[data-time-of-day="before_sunset"] .description-box {
+  background: rgba(255, 255, 255, 0.68);
+  border-color: rgba(15, 23, 42, 0.1);
+  box-shadow:
+    0 4px 24px rgba(2, 132, 199, 0.12),
+    0 1px 0 rgba(255,255,255,0.9) inset;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+body[data-time-of-day="before_sunset"] .description-box::before {
+  background: linear-gradient(180deg, transparent, #0284c7, #38bdf8, transparent);
+  box-shadow: 0 0 10px rgba(2, 132, 199, 0.4);
+}
+
+/* ── 글래스 카드 공통 ── */
+body[data-time-of-day="before_sunset"] .glass {
+  background: rgba(255, 255, 255, 0.62);
+  border-color: rgba(15, 23, 42, 0.1);
+  box-shadow:
+    0 4px 20px rgba(2, 132, 199, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+
+body[data-time-of-day="before_sunset"] .glass:hover {
+  box-shadow:
+    0 8px 28px rgba(2, 132, 199, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  border-color: rgba(2, 132, 199, 0.2);
+}
+
+/* ── 하단 네비게이션 ── */
 body[data-time-of-day="before_sunset"] .tab-bar {
   background: rgba(255, 255, 255, 0.88);
   border-color: rgba(15, 23, 42, 0.1);
+  box-shadow: 0 -4px 20px rgba(2, 132, 199, 0.1);
 }
 
 body[data-time-of-day="before_sunset"] .tab-bar::before {
@@ -93,39 +227,24 @@ body[data-time-of-day="before_sunset"] .tab-bar::before {
 }
 
 body[data-time-of-day="before_sunset"] .tab-item.active {
-  background: rgba(2, 132, 199, 0.2);
+  background: rgba(2, 132, 199, 0.18);
   color: #0369a1;
   text-shadow: none;
 }
 
+body[data-time-of-day="before_sunset"] .tab-item {
+  color: #334155;
+}
+
+/* ── Detail/Forecast 카드 ── */
 body[data-time-of-day="before_sunset"] .metric-card.primary {
-  background: linear-gradient(135deg, rgba(255,255,255,0.9), rgba(255,255,255,0.8));
-  border-color: rgba(15, 23, 42, 0.12);
-}
-
-body[data-time-of-day="before_sunset"] .score-inner {
-  background: linear-gradient(180deg, rgba(255,255,255,0.95) 0%, rgba(186, 230, 253, 0.9) 50%, rgba(56, 189, 248, 0.85) 100%);
-  box-shadow: inset 0 0 40px rgba(255,255,255,0.5);
-}
-
-body[data-time-of-day="before_sunset"] .gauge-section::before {
-  background: radial-gradient(
-    ellipse at center,
-    rgba(2, 132, 199, 0.2) 0%,
-    rgba(2, 132, 199, 0.06) 40%,
-    transparent 70%
+  background: linear-gradient(
+    135deg,
+    rgba(255,255,255,0.92) 0%,
+    rgba(224,242,254,0.85) 100%
   );
-}
-
-body[data-time-of-day="before_sunset"] .score-glow {
-  background: conic-gradient(
-    var(--accent) calc(var(--progress, 0) * 360deg),
-    rgba(15, 23, 42, 0.15) 0
-  ) !important;
-  box-shadow: 
-    0 0 25px rgba(2, 132, 199, 0.35),
-    0 0 50px rgba(2, 132, 199, 0.15),
-    inset 0 0 15px rgba(2, 132, 199, 0.08);
+  border-color: rgba(15, 23, 42, 0.1);
+  box-shadow: 0 4px 20px rgba(2,132,199,0.12);
 }
 
 /* 일몰 시간대: 주황·빨강·노랑 일몰 느낌 */
