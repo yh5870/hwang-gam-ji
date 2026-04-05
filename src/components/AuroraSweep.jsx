@@ -9,18 +9,16 @@ import { useWeather } from '../contexts/WeatherContext'
 export default function AuroraSweep() {
   const { timeOfDay } = useWeather()
   const prevRef = useRef(timeOfDay)
-  const [active, setActive] = useState(false)
+  // ── 테스트용: 마운트 즉시 발동 ──
+  const [active, setActive] = useState(true)
 
   useEffect(() => {
-    const prev = prevRef.current
-    prevRef.current = timeOfDay
+    const t = setTimeout(() => setActive(false), 3200)
+    return () => clearTimeout(t)
+  }, [])
 
-    if (prev !== 'after_sunset' && timeOfDay === 'after_sunset') {
-      setActive(true)
-      const t = setTimeout(() => setActive(false), 3200)
-      return () => clearTimeout(t)
-    }
-  }, [timeOfDay])
+  // eslint-disable-next-line no-unused-vars
+  const _prevRef = prevRef   // 원래 로직 참조 보존
 
   if (!active) return null
 
