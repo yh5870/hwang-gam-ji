@@ -1,13 +1,13 @@
 /**
  * 공공데이터포털 API 연동
- * ① 기상청 ASOS: 시정(가시거리)
+ * ① 가시거리: Google Maps Platform Weather API (실시간, 황령산 좌표 기준)
  * ② 기상청 단기예보: SKY, PTY, REH(습도) - 황령산 격자(98,75)
- * ③ 부산광역시 대기질: 미세먼지(PM10), 초미세먼지(PM2.5) - 전포동 측정소 (황령산 봉수대 전포동 쪽)
+ * ③ 부산광역시 대기질: 미세먼지(PM10), 초미세먼지(PM2.5) - 전포동 측정소
+ * ※ 기상청 ASOS(전날 확정값)는 부정확하여 제거. 2시간 이상 지난 데이터는 사용하지 않음.
  */
 
 const DATA_GO_KR = 'https://apis.data.go.kr'
 
-const ASOS_BASE = `${DATA_GO_KR}/1360000/AsosHourlyInfoService`
 const VILAGE_BASE = `${DATA_GO_KR}/1360000/VilageFcstInfoService_2.0`
 const AIR_QUALITY_BASE = `${DATA_GO_KR}/6260000/AirQualityInfoService`
 
@@ -46,7 +46,6 @@ async function fetchDataGoKrJson(absoluteUrl) {
 /** 전포동 측정소 검색 키워드 (황령산 봉수대 전포동 쪽) */
 const JEONPO_STATION_KEYWORDS = ['전포', '전포동', '부산진구']
 
-const BUSAN_STN = 159
 const HWANGNYEONG_NX = 98
 const HWANGNYEONG_NY = 75
 
@@ -90,45 +89,20 @@ function getLatestBaseTime() {
 }
 
 /**
- * 가시거리 조회 - 1순위: 기상청 ASOS(어제 확정값), 2순위: Google Weather API(실시간)
- * ASOS getWthrDataList(dateCd=HR)는 전날까지만 제공(오늘 포함 시 resultCode 99).
- * ASOS 실패 시 Google Maps Platform Weather API로 황령산 좌표 기준 가시거리를 반환.
+ * 가시거리 조회 - Google Maps Platform Weather API (실시간, 황령산 좌표 기준)
+ * API 키는 프록시 서버(GOOGLE_WEATHER_KEY 환경변수)에서 주입됨.
+ * 실패 시 null 반환 → fetchHwangGamWeather에서 예보 기반 추정으로 자동 전환.
+ * ※ 기상청 ASOS는 전날 확정값만 제공하여 부정확 → 완전 제거.
  */
-export async function fetchAsosVisibility(apiKey) {
-  const now = nowKST()
-  const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000)
-  const dateYesterday = `${yesterday.getFullYear()}${String(yesterday.getMonth() + 1).padStart(2, '0')}${String(yesterday.getDate()).padStart(2, '0')}`
-
-  // 1순위: ASOS 어제 데이터
-  const asosResult = await fetchAsosVisibilityYesterday(apiKey, dateYesterday)
-  if (asosResult?.value != null) return asosResult
-
-  console.warn('[ASOS] 데이터 없음, Google Weather API로 폴백:', asosResult?.error)
-
-  // 2순위: Google Weather API (실시간, 황령산 좌표 기준)
-  const googleResult = await fetchGoogleWeatherVisibility()
-  if (googleResult?.value != null) return googleResult
-
-  throw new Error(
-    asosResult?.error
-      ? `가시거리 데이터를 불러올 수 없습니다. (${asosResult.error})`
-      : '가시거리 데이터를 불러올 수 없습니다.',
-  )
+export async function fetchAsosVisibility() {
+  return fetchGoogleWeatherVisibility()
 }
 
-/**
- * Google Maps Platform Weather API - 현재 가시거리 조회
- * 황령산 봉수대 좌표(35.15723, 129.08191) 기준 실시간 데이터.
- * API 키는 프록시 서버(GOOGLE_WEATHER_KEY 환경변수)에서 주입됨.
- */
+/** Google Weather API: 황령산 봉수대(35.15723, 129.08191) 기준 현재 가시거리 */
 async function fetchGoogleWeatherVisibility() {
-  // 황령산 봉수대 좌표
-  const lat = 35.15723
-  const lng = 129.08191
-
   const params = new URLSearchParams({
-    'location.latitude': String(lat),
-    'location.longitude': String(lng),
+    'location.latitude': '35.15723',
+    'location.longitude': '129.08191',
   })
   const targetUrl = `https://weather.googleapis.com/v1/currentConditions:lookup?${params}`
 
@@ -158,78 +132,22 @@ async function fetchGoogleWeatherVisibility() {
   const windKph = data?.wind?.speed?.value ?? null
   const windMs = windKph != null ? Math.round((windKph / 3.6) * 10) / 10 : null
 
-  console.info('[Google Weather] 가시거리:', distKm, 'km | 기온:', tempC, '°C')
+  // UTC → KST 변환 (getHoursSinceObservation이 KST 기준으로 경과시간을 계산하므로)
+  let observedAt = null
+  if (data?.currentTime) {
+    const kst = new Date(new Date(data.currentTime).getTime() + 9 * 60 * 60 * 1000)
+    observedAt = `${kst.getFullYear()}-${String(kst.getMonth() + 1).padStart(2, '0')}-${String(kst.getDate()).padStart(2, '0')} ${String(kst.getHours()).padStart(2, '0')}:${String(kst.getMinutes()).padStart(2, '0')}`
+  }
+
+  console.info('[Google Weather] 가시거리:', distKm, 'km | 기온:', tempC, '°C | 관측(KST):', observedAt)
 
   return {
     value: Number(distKm),
     temperature: tempC != null ? Number(tempC) : null,
     wind_speed: windMs,
-    observedAt: data?.currentTime ? data.currentTime.slice(0, 13).replace('T', ' ') : null,
+    observedAt,
     stationName: '황령산 (Google Weather)',
     source: 'google',
-    error: null,
-  }
-}
-
-/** 어제 하루치(00~23시) 조회 후 vs가 있는 가장 최신 관측값 반환 */
-async function fetchAsosVisibilityYesterday(apiKey, dateYesterday) {
-  const params = new URLSearchParams({
-    serviceKey: apiKey,
-    pageNo: 1,
-    numOfRows: 24,
-    dataType: 'JSON',
-    dataCd: 'ASOS',
-    dateCd: 'HR',
-    startDt: dateYesterday,
-    startHh: '00',
-    endDt: dateYesterday,
-    endHh: '23',
-    stnIds: String(BUSAN_STN),
-  })
-
-  const url = `${ASOS_BASE}/getWthrDataList?${params}`
-  let data
-  try {
-    data = await fetchDataGoKrJson(url)
-  } catch (e) {
-    console.warn('[ASOS] 네트워크/파싱 오류:', e?.message)
-    return { value: null, error: `네트워크 오류: ${e?.message || '연결 실패'}` }
-  }
-
-  const header = data.response?.header
-  const resultCode = String(header?.resultCode ?? '')
-  const resultMsg = header?.resultMsg || ''
-  if (resultCode !== '00' && resultCode !== '0') {
-    return { value: null, error: resultMsg || `API 오류 (코드: ${resultCode})` }
-  }
-
-  const items = data.response?.body?.items?.item
-  if (!items || (Array.isArray(items) && items.length === 0)) {
-    return { value: null, error: '응답에 데이터 없음' }
-  }
-
-  const list = Array.isArray(items) ? items : [items]
-  const withVs = list
-    .filter((it) => it != null && it.vs != null && it.vs !== '' && String(it.vs).trim() !== '')
-    .sort((a, b) => (b.tm || '').localeCompare(a.tm || ''))
-
-  const item = withVs[0]
-  if (!item) return { value: null, error: '시정(vs) 값 없음' }
-
-  const vs = Number(item.vs)
-  if (Number.isNaN(vs) || vs < 0) {
-    return { value: null, error: `잘못된 시정 값: ${item.vs}` }
-  }
-
-  const ta = item.ta != null && item.ta !== '' ? Number(item.ta) : null
-  const ws = item.ws != null && item.ws !== '' ? Number(item.ws) : null
-
-  return {
-    value: vs / 100,
-    temperature: !Number.isNaN(ta) ? ta : null,
-    wind_speed: !Number.isNaN(ws) ? ws : null,
-    observedAt: item.tm || null,
-    stationName: item.stnNm || '부산',
     error: null,
   }
 }
@@ -465,7 +383,7 @@ function estimateVisibilityFromForecast(sky, reh, dustBad) {
  */
 export async function fetchHwangGamWeather(apiKey) {
   const [asosResult, vilage, air] = await Promise.all([
-    fetchAsosVisibility(apiKey).catch(() => null),
+    fetchAsosVisibility().catch(() => null),
     fetchVilageFcst(apiKey),
     fetchAirQuality(apiKey).catch(() => null),
   ])
@@ -486,8 +404,8 @@ export async function fetchHwangGamWeather(apiKey) {
   const visibilityStation = asosResult?.stationName || '부산 기상관측소'
   const observedVisibilityKm = asosResult?.value ?? null
   const hoursSinceObs = getHoursSinceObservation(visibilityObservedAt)
-  // ASOS는 전날까지만 자료를 제공하므로 최대 ~36시간 전 데이터까지 실측값으로 인정.
-  const asosStale = hoursSinceObs != null && hoursSinceObs > 36
+  // Google Weather는 실시간 데이터. 2시간 이상 지난 값은 신뢰하지 않고 추정으로 전환.
+  const asosStale = hoursSinceObs != null && hoursSinceObs > 2
 
   const estimatedVis = estimateVisibilityFromForecast(vilage.sky, vilage.reh, dustLevel === 'Bad')
   const hasObserved = observedVisibilityKm != null
