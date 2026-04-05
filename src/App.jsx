@@ -3,6 +3,9 @@ import { WeatherProvider } from './contexts/WeatherContext'
 import ThemeByTime from './components/ThemeByTime'
 import './App.css'
 import Fireflies from './components/Fireflies'
+import Skyline from './components/Skyline'
+import CloudLayer from './components/CloudLayer'
+import AuroraSweep from './components/AuroraSweep'
 import Home from './pages/Home'
 import Detail from './pages/Detail'
 import Forecast from './pages/Forecast'
@@ -15,7 +18,14 @@ export default function App() {
       <ThemeByTime />
       <BrowserRouter>
         <div className="app">
+          {/* 배경 레이어 (z-index 0, 콘텐츠 뒤) */}
           <Fireflies />
+          <CloudLayer />
+          <Skyline />
+
+          {/* 전환 효과 (z-index 20, 일시적으로 최상위) */}
+          <AuroraSweep />
+
           <main>
             <Routes>
               <Route path="/" element={<Home />} />

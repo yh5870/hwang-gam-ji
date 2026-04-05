@@ -297,6 +297,70 @@ body {
   padding-bottom: env(safe-area-inset-bottom, 0);
 }
 
+/* ════════════════════════════════════════════
+   스카이라인 창문 깜빡임
+   ════════════════════════════════════════════ */
+@keyframes win-blink {
+  0%, 100%   { opacity: 0.82; }
+  88%, 90%   { opacity: 0.08; }
+  92%        { opacity: 0.75; }
+  97%, 99%   { opacity: 0.05; }
+}
+
+/* ════════════════════════════════════════════
+   오로라 스윕 (일몰 → 밤 전환)
+   ════════════════════════════════════════════ */
+.aurora-sweep-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 20;
+  overflow: hidden;
+  animation: aurora-fade 3.2s ease-out forwards;
+}
+
+.aurora-sweep-bands {
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 320%;
+  height: 100%;
+  background: repeating-linear-gradient(
+    108deg,
+    transparent          0px,
+    transparent          70px,
+    rgba(139,92,246,0.38)  70px,
+    rgba(139,92,246,0.38) 104px,
+    transparent         104px,
+    transparent         170px,
+    rgba(34,211,238,0.32) 170px,
+    rgba(34,211,238,0.32) 200px,
+    transparent         200px,
+    transparent         268px,
+    rgba(167,139,250,0.28) 268px,
+    rgba(167,139,250,0.28) 294px,
+    transparent         294px,
+    transparent         362px,
+    rgba(99,102,241,0.22) 362px,
+    rgba(99,102,241,0.22) 384px,
+    transparent         384px,
+    transparent         450px
+  );
+  animation: aurora-slide 3.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes aurora-fade {
+  0%   { opacity: 0; }
+  12%  { opacity: 1; }
+  80%  { opacity: 0.9; }
+  100% { opacity: 0; }
+}
+
+@keyframes aurora-slide {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(62%); }
+}
+
 /* Glass card - 배경과 분리된 투명 카드 (테두리 글로우, 상단 하이라이트) */
 .glass {
   background: var(--glass);
