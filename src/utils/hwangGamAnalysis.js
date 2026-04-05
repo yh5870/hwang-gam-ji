@@ -3,6 +3,21 @@
  * ※ 점수 체계: 10의 자리 = 가시거리, 1의 자리 = 습도·미세먼지
  * ※ timeOfDay: 일몰 전(before_sunset) / 일몰 시간(sunset ±30분) / 일몰 후(after_sunset)
  *
+ * 가시거리 데이터 출처
+ *  ① Open-Meteo 실측: 최대 24.14km (상한)
+ *  ② 24km 도달 시 예보 보정: 최대 50km (습도·하늘·먼지 기반 추정)
+ *  ③ 추정만 사용: 최대 50km
+ * → 대마도(~85km)는 현재 데이터 체계로 확인 불가
+ *
+ * 황령산에서 주요 랜드마크까지 거리
+ *  광안대교    ≈  3.5km
+ *  해운대 LCT  ≈  7km
+ *  기장 산줄기 ≈ 15km
+ *  가덕도      ≈ 25km
+ *  거제도 동부 ≈ 35km
+ *  거제도 남단 ≈ 50km
+ *  대마도      ≈ 85km  ← 현재 데이터로 확인 불가
+ *
  * Dust 레벨: 'excellent' | 'good' | 'moderate' | 'bad'
  */
 
@@ -23,12 +38,12 @@ function getOnesDigit(hum, dustBad, dustModerate) {
 }
 
 /**
- * 가시거리별 점수 구간 (사용자 체감 반영)
- * - 50km+ → 90-99
- * - 40-49km → 80-89
- * - 30-39km → 70-79
- * - 20-29km → 70-79
- * - 0-20km → 0-69 (가시거리에 비례 분포, 1의 자리는 습도·먼지)
+ * 가시거리별 점수 구간
+ * - 50km+  → 90-99 (예보 보정 최상 / 거제도 남단)
+ * - 40-49km → 80-89 (거제도 산줄기)
+ * - 20-39km → 70-79 (가덕도·기장 선명)
+ * - 10-19km → 40-69 (마린시티·LCT 일대)
+ * - 0-9km   → 0-39  (광안대교 근처)
  */
 function getBaseScoreFromVisibility(vis, ones) {
   if (vis >= 50) return 90 + ones
@@ -76,13 +91,14 @@ export function getHwangGamAnalysis({ visibility_km, humidity, dust, sky = '', s
   const cloudySky = isSkyCloudy(sky)
 
   const msg = (before, sunset, after) => (t === 'before_sunset' ? before : t === 'sunset' ? sunset : after)
-
   const appendSunset = (s) => (sunsetHHMM ? `${s} (오늘 일몰 ${sunsetHHMM})` : s)
-
   const buildResult = (obj) => ({ ...obj, sunsetStr, sunsetHHMM })
 
-  // 잭팟: 70km↑ + 좋은 조건
-  if (vis >= 70 && hum <= 30 && dustGood) {
+  // ──────────────────────────────────────────────────────
+  // 잭팟: 50km+ (예보 보정 최상) + 극히 좋은 조건
+  // ※ Open-Meteo 상한 24km + 추정 보정으로 최대 50km
+  // ──────────────────────────────────────────────────────
+  if (vis >= 50 && hum <= 30 && dustGood) {
     return buildResult({
       caseId: 1,
       caseName: '신의 영역',
@@ -90,43 +106,46 @@ export function getHwangGamAnalysis({ visibility_km, humidity, dust, sky = '', s
       isJackpot: true,
       jackpotLevel: 2,
       message: msg(
-        '10,000점 잭팟! 우주에서도 보일 조망이에요. 지금이 포착 타이밍!',
-        clearSky ? '10,000점 잭팟! 하늘이 맑아서 일몰이 환상적일 거예요!' : '10,000점 잭팟! 오늘 일몰·야경 모두 기대해도 돼요.',
-        '10,000점 잭팟! 우주에서도 보일 야경이에요. 당장 카메라 들고 뛰어가세요!',
+        '10,000점 잭팟! 거제도 남단까지 훤히 보여요. 지금 당장 올라가세요!',
+        clearSky ? '10,000점 잭팟! 하늘이 맑고 시야가 최상이에요. 일몰이 환상적일 거예요!' : '10,000점 잭팟! 오늘 일몰과 야경 모두 기대해도 돼요.',
+        '10,000점 잭팟! 거제도 남단까지 훤히 보이는 야경이에요. 당장 카메라 들고 뛰어가세요!',
       ),
       detail: {
-        clearRange: '대마도 남단까지 선명',
+        clearRange: '거제도 남단·가덕도·기장 해안선까지 선명',
         blurryFrom: null,
-        reason: '대기가 매우 건조하고 깨끗해요. 수증기에 의한 빛 산란이 없어 대마도 산등성이 눈앞에 있는 듯 보여요.',
-        condition: '진공 상태급 조망',
+        reason: '대기가 매우 건조하고 깨끗해요. 예보 보정 기준으로 50km 이상 가시거리가 추정돼요. 거제도 산등성이가 눈앞에 있는 듯 뚜렷해요.',
+        condition: '최상의 조망',
         conditionKey: 'god_tier',
       },
     })
   }
 
-  if (vis >= 70 && hum <= 45) {
+  if (vis >= 50 && hum <= 45) {
     return buildResult({
       caseId: 1,
-      caseName: '신의 영역 (약간 습함)',
+      caseName: '거제도 훤히 보임',
       score: 10000,
       isJackpot: true,
       jackpotLevel: 2,
       message: msg(
-        '대마도까지 보여요! 조망 최상이에요.',
-        clearSky ? '하늘이 맑아서 일몰이 예쁠 거예요. 대마도도 보여요!' : '가시거리 좋아요. 일몰·야경 모두 기대해도 돼요.',
-        '대마도까지 보여요! 습도가 조금 있지만 야경은 최상이에요.',
+        '거제도까지 보여요! 조망 최상이에요.',
+        clearSky ? '하늘이 맑아서 일몰이 예쁠 거예요. 거제도도 보여요!' : '가시거리 좋아요. 일몰·야경 모두 기대해도 돼요.',
+        '거제도까지 보여요! 습도가 조금 있지만 야경은 최상이에요.',
       ),
       detail: {
-        clearRange: '대마도 남단, 거제도 선명',
+        clearRange: '거제도 산줄기, 가덕도 선명',
         blurryFrom: null,
-        reason: '가시거리는 충분하지만 습도가 있어 아주 칼날 같은 선명도는 아니에요. 그래도 대마도 산줄기는 뚜렷해요.',
+        reason: '가시거리는 충분하지만 습도가 다소 있어 아주 칼날 같은 선명도는 아니에요. 그래도 거제도 능선은 뚜렷해요.',
         condition: '역대급 조망',
         conditionKey: 'god_tier_slight_humid',
       },
     })
   }
 
-  if (vis >= 50 && hum <= 40 && dustGood) {
+  // ──────────────────────────────────────────────────────
+  // 잭팟: 40km+ + 좋은 조건 (거제도 산줄기 뚜렷)
+  // ──────────────────────────────────────────────────────
+  if (vis >= 40 && hum <= 35 && dustGood) {
     return buildResult({
       caseId: 2,
       caseName: '잭팟',
@@ -134,21 +153,21 @@ export function getHwangGamAnalysis({ visibility_km, humidity, dust, sky = '', s
       isJackpot: true,
       jackpotLevel: 1,
       message: msg(
-        '60km 잭팟! 황금의 순간이에요. 조망이 환상적이에요.',
-        clearSky ? '60km 잭팟! 하늘이 맑아서 오늘 일몰 정말 이쁠 거예요!' : '60km 잭팟! 일몰·야경 모두 기대해도 돼요.',
-        '60km 잭팟! 황금의 순간이에요. 야경이 환상적이에요.',
+        '잭팟! 거제도 산줄기가 뚜렷해요. 황금의 순간이에요.',
+        clearSky ? '잭팟! 하늘이 맑아서 오늘 일몰 정말 이쁠 거예요!' : '잭팟! 일몰·야경 모두 기대해도 돼요.',
+        '잭팟! 거제도 산줄기가 뚜렷한 야경이에요.',
       ),
       detail: {
-        clearRange: '대마도 북단 식별 가능, 거제도 산줄기 입체적',
+        clearRange: '거제도 동부 산줄기 입체적, 가덕도·기장 해안선 뚜렷',
         blurryFrom: null,
-        reason: '초고기압 영향권이에요. 거제도 산줄기가 입체적으로 보이고, 수평선 너머 대마도가 그림자처럼 보여요.',
+        reason: '맑고 건조한 대기 덕분에 거제도 산줄기가 입체적으로 보여요. 예보 보정 기준으로 40km 이상 추정돼요.',
         condition: '황금의 순간',
         conditionKey: 'jackpot',
       },
     })
   }
 
-  if (vis >= 70 && hum > 45) {
+  if (vis >= 40 && hum > 35) {
     return buildResult({
       caseId: 2,
       caseName: '잭팟 (습도 보정)',
@@ -156,22 +175,26 @@ export function getHwangGamAnalysis({ visibility_km, humidity, dust, sky = '', s
       isJackpot: true,
       jackpotLevel: 1,
       message: msg(
-        '가시거리는 최상이에요. 멀리 대마도는 흐릿할 수 있어요.',
-        clearSky ? '하늘이 맑아서 일몰은 이쁠 거예요. 멀리 대마도는 흐릿할 수 있어요.' : '가시거리 좋아요. 일몰은 기대해도 돼요.',
-        '가시거리는 최상인데 습도가 높아 멀리 대마도는 흐릿할 수 있어요.',
+        '가시거리 최상이에요. 습도 때문에 거제도는 흐릿할 수 있어요.',
+        clearSky ? '하늘이 맑아서 일몰은 이쁠 거예요. 거제도 방향은 흐릿할 수 있어요.' : '가시거리 좋아요. 일몰은 기대해도 돼요.',
+        '가시거리 최상인데 습도가 있어 거제도는 흐릿하게 보일 수 있어요.',
       ),
       detail: {
-        clearRange: '거제도·기장·가덕도 선명',
-        blurryFrom: '대마도 방향',
-        reason: '가시거리 70km 이상이지만 습도가 있어 수증기 산란이 있어요.',
+        clearRange: '가덕도·기장·해운대 방향 선명',
+        blurryFrom: '거제도 방향',
+        reason: '가시거리 40km 이상으로 추정되지만 습도가 있어 수증기 산란이 있어요.',
         condition: '습도 보정 잭팟',
         conditionKey: 'jackpot_humid',
       },
     })
   }
 
+  // ──────────────────────────────────────────────────────
+  // 일반 케이스
+  // ──────────────────────────────────────────────────────
   const score = Math.max(1, Math.min(99, baseScore))
 
+  // 안개·짙은 연무
   if (vis <= 5 || (vis <= 10 && hum >= 95)) {
     return buildResult({
       caseId: 6,
@@ -190,8 +213,9 @@ export function getHwangGamAnalysis({ visibility_km, humidity, dust, sky = '', s
     })
   }
 
+  // 습도 매우 높음 + 24km 이상
   if (vis >= 20 && hum > 80) {
-    const blurryFrom = hum >= 90 ? '광안대교(3.5km) 너머' : '해운대 LCT(7.5km) 근처부터'
+    const blurryFrom = hum >= 90 ? '광안대교(3.5km) 너머' : '해운대 LCT(7km) 근처부터'
     return buildResult({
       caseId: 4,
       caseName: '해무의 습격',
@@ -213,6 +237,7 @@ export function getHwangGamAnalysis({ visibility_km, humidity, dust, sky = '', s
     })
   }
 
+  // 먼지 나쁨 + 건조
   if (dustBad && hum <= 50) {
     return buildResult({
       caseId: 5,
@@ -235,7 +260,33 @@ export function getHwangGamAnalysis({ visibility_km, humidity, dust, sky = '', s
     })
   }
 
-  if (vis >= 25 && hum <= 55) {
+  // 30km 이상 · 습도 55% 이하 → 청명 (가덕도~거제도 윤곽)
+  if (vis >= 30 && hum <= 55) {
+    return buildResult({
+      caseId: 3,
+      caseName: '청명한 부산',
+      score,
+      isJackpot: false,
+      jackpotLevel: 0,
+      message: dustBad
+        ? msg('먼지 때문에 선명도가 떨어져요.', '먼지 때문에 일몰이 아쉬울 수 있어요.', '먼지 때문에 선명도가 떨어져요.')
+        : msg(
+            '거제도 방향까지 윤곽이 보여요. 조망 보기 좋은 날이에요!',
+            clearSky ? appendSunset('하늘이 맑아서 일몰이 예쁠 거예요!') : '일몰 시간대예요. 하늘 상태 확인해보세요.',
+            '거제도 방향까지 윤곽이 보이는 야경이에요!',
+          ),
+      detail: {
+        clearRange: '가덕도 선명, 거제도 방향 윤곽 확인 가능',
+        blurryFrom: dustBad ? '중거리부터' : '거제도 남단 이원',
+        reason: dustBad ? '미세먼지가 빛을 흡수해 채도가 낮아 보여요.' : '부산 전역이 깨끗해요. 가덕도가 선명하고 거제도 방향 능선도 보여요.',
+        condition: dustBad ? '먼지 낀 청명' : '청명',
+        conditionKey: dustBad ? 'clear_dusty' : 'clear',
+      },
+    })
+  }
+
+  // 20-29km 범위 · 습도 55% 이하
+  if (vis >= 20 && hum <= 55) {
     return buildResult({
       caseId: 3,
       caseName: '청명한 부산',
@@ -251,14 +302,15 @@ export function getHwangGamAnalysis({ visibility_km, humidity, dust, sky = '', s
           ),
       detail: {
         clearRange: '가덕도·기장·해운대 LCT 창문 하나하나까지 선명',
-        blurryFrom: dustBad ? '중거리부터' : null,
-        reason: dustBad ? '미세먼지가 빛을 흡수해 채도가 낮아 보여요.' : '부산 전역이 깨끗해요. 공기가 맑아 시야가 선명해요.',
+        blurryFrom: dustBad ? '중거리부터' : '가덕도 너머',
+        reason: dustBad ? '미세먼지가 빛을 흡수해 채도가 낮아 보여요.' : '부산 전역이 깨끗해요. 가덕도까지 선명하게 보여요.',
         condition: dustBad ? '먼지 낀 청명' : '청명',
         conditionKey: dustBad ? 'clear_dusty' : 'clear',
       },
     })
   }
 
+  // 습도 중간 (60-80%)
   if (vis >= 15 && hum > 60 && hum <= 80) {
     return buildResult({
       caseId: 4,
@@ -281,6 +333,7 @@ export function getHwangGamAnalysis({ visibility_km, humidity, dust, sky = '', s
     })
   }
 
+  // 먼지 나쁨 · 10-25km
   if (vis >= 10 && vis < 25 && dustBad) {
     return buildResult({
       caseId: 5,
@@ -295,7 +348,7 @@ export function getHwangGamAnalysis({ visibility_km, humidity, dust, sky = '', s
       ),
       detail: {
         clearRange: '서면·해운대 인근 빌딩 형태',
-        blurryFrom: '산줄기·수평선',
+        blurryFrom: '기장 방향 산줄기·수평선',
         reason: '미세먼지가 빛을 흡수해 하늘이 회색이나 주황색으로 보여요.',
         condition: '퍽퍽한 시야',
         conditionKey: 'dusty',
@@ -303,6 +356,7 @@ export function getHwangGamAnalysis({ visibility_km, humidity, dust, sky = '', s
     })
   }
 
+  // 10-25km 보통
   if (vis >= 10 && vis < 25) {
     return buildResult({
       caseId: vis >= 20 ? 4 : 5,
@@ -316,7 +370,7 @@ export function getHwangGamAnalysis({ visibility_km, humidity, dust, sky = '', s
         '조망은 가능한 수준이에요. 야경은 기대만큼 선명하진 않을 수 있어요.',
       ),
       detail: {
-        clearRange: '가덕도·광안대교 일대',
+        clearRange: '광안대교·마린시티·해운대 앞바다',
         blurryFrom: '기장 방향 산줄기부터',
         reason: '가시거리와 습도가 보통 수준이에요.',
         condition: '보통',
@@ -325,6 +379,7 @@ export function getHwangGamAnalysis({ visibility_km, humidity, dust, sky = '', s
     })
   }
 
+  // 10km 미만
   if (vis < 10) {
     return buildResult({
       caseId: 6,
@@ -347,6 +402,7 @@ export function getHwangGamAnalysis({ visibility_km, humidity, dust, sky = '', s
     })
   }
 
+  // 폴백: 25km 이상 · 습도 중간 (56-80%)
   return buildResult({
     caseId: 3,
     caseName: '청명한 부산',
@@ -360,7 +416,7 @@ export function getHwangGamAnalysis({ visibility_km, humidity, dust, sky = '', s
     ),
     detail: {
       clearRange: '가덕도·기장·해운대 일대 선명',
-      blurryFrom: '수평선 근처 대마도 쪽',
+      blurryFrom: '거제도 방향 수평선 근처',
       reason: '가시거리 수치는 좋은데 습도가 있어 수증기 산란이 조금 있어요.',
       condition: '습한 청명',
       conditionKey: 'clear_humid',

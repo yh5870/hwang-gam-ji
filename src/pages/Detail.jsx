@@ -86,26 +86,26 @@ export default function Detail() {
           </span>
           <span className="metric-unit">km</span>
           <span className="metric-sub metric-source">
-            <>
-              {m.visibility_observed_km != null ? (
-                <>
-                  {m.visibility_at_cap
-                    ? `Open-Meteo 24km+ 확인 · 예보 보정값`
-                    : `실측 ${m.visibility_observed_km}km · ${m.visibility_station || 'Open-Meteo'}`}
-                  {m.visibility_observed_at && !m.visibility_at_cap
-                    ? ` · ${formatObservedAt(m.visibility_observed_at)}`
-                    : ''}
-                </>
-              ) : (
-                <>실측값 없음</>
-              )}
-              {m.visibility_estimated_km != null && (
-                <>
-                  <br />
-                  추정 {m.visibility_estimated_km}km · {m.fcst_at || '현재 시간대 예보'} (습도·하늘·먼지 반영)
-                </>
-              )}
-            </>
+            {m.visibility_at_cap ? (
+              <>
+                Open-Meteo 실측 24km 이상 (상한 도달)
+                <br />
+                예보 보정 추정 {m.visibility_estimated_km}km · {m.fcst_at || '현재 예보'} 반영
+                <br />
+                <span style={{ opacity: 0.75 }}>※ 최대 50km까지 추정, 대마도(85km)는 확인 불가</span>
+              </>
+            ) : m.visibility_observed_km != null ? (
+              <>
+                Open-Meteo 실측 {m.visibility_observed_km}km
+                {m.visibility_observed_at ? ` · ${formatObservedAt(m.visibility_observed_at)}` : ''}
+              </>
+            ) : (
+              <>
+                실측 없음 · 예보 기반 추정 {m.visibility_estimated_km ?? m.visibility_km}km
+                <br />
+                {m.fcst_at || '현재 예보'} (습도·하늘·먼지 반영, 최대 50km)
+              </>
+            )}
           </span>
         </div>
 

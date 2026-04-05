@@ -19,14 +19,21 @@ export default function Home() {
   const navigate = useNavigate()
   const { metrics, analysis, loading, error, updatedAt, refresh, sunsetHHMM, timeOfDay } = useWeather()
 
-  const visBasis =
-    metrics?.visibility_source === 'observed_refined'
-      ? `가시거리 24km 이상 확인 · 습도·하늘·먼지 예보로 ${metrics.visibility_km}km 추정.`
-      : metrics?.visibility_source === 'observed'
-        ? `가시거리 ${metrics.visibility_observed_km}km 실측을 반영했습니다.`
-        : metrics?.visibility_source === 'estimated'
-          ? '가시거리는 실측 부재 시 예보 기반 추정값을 썼습니다.'
-          : ''
+  const visBasis = (() => {
+    const src = metrics?.visibility_source
+    const obsKm = metrics?.visibility_observed_km
+    const visKm = metrics?.visibility_km
+    if (src === 'observed_refined') {
+      return `Open-Meteo 실측 24km+(상한) · 예보 보정으로 ${visKm}km 추정. (최대 50km 추정 가능)`
+    }
+    if (src === 'observed') {
+      return `Open-Meteo 실측 ${obsKm}km 반영.`
+    }
+    if (src === 'estimated') {
+      return `실측 없음 · 습도·하늘·먼지 기반 ${visKm}km 추정. (최대 50km)`
+    }
+    return ''
+  })()
   const scoreBasisText = metrics
     ? `${visBasis ? `${visBasis} ` : ''}습도·미세먼지·하늘·일몰을 함께 반영한 종합 점수입니다.`
     : ''
